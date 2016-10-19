@@ -16,18 +16,19 @@
 package org.springframework.data.cassandra.core;
 
 /**
- * An interface used by {@link AsyncCqlTemplate} for processing entities of a converted
+ * An interface used by {@link AsyncCassandraTemplate} for processing entities of a converted
  * {@link com.datastax.driver.core.ResultSet} on a per-entity basis. Implementations of this interface perform the
  * actual work of processing each entity.
  *
  * @author Mark Paluch
  * @param <T>
- * @since 2.0
+ * @since 2.0 TODO: ObjectCallback or Consumer<T>?
  */
 public interface ObjectCallback<T> {
 
 	/**
-	 * Implementations must implement this method to process each entity in the {@link java.sql.ResultSet}.
+	 * Implementations must implement this method to process each entity in the
+	 * {@link com.datastax.driver.core.ResultSet}.
 	 * <p>
 	 * Exactly what the implementation chooses to do is up to it: A trivial implementation might simply count entities,
 	 * while another implementation might build an XML document.

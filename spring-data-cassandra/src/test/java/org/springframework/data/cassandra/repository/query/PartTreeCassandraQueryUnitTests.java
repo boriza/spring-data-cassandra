@@ -49,7 +49,7 @@ public class PartTreeCassandraQueryUnitTests {
 
 	@Rule public ExpectedException exception = ExpectedException.none();
 
-	@Mock private CassandraOperations mockCassandraOperations;
+	@Mock CassandraOperations mockCassandraOperations;
 
 	private CassandraMappingContext mappingContext;
 	private CassandraConverter converter;

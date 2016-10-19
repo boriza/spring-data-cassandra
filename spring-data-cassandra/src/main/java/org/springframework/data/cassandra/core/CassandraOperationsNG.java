@@ -1,7 +1,7 @@
 /*
  * Copyright 2016 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
+ * Licensed under the Apache License, Version 2.0 (the "License")
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
@@ -17,6 +17,7 @@ package org.springframework.data.cassandra.core;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Stream;
 
 import org.springframework.cassandra.core.CqlOperations;
 import org.springframework.cassandra.core.QueryOptions;
@@ -28,8 +29,8 @@ import org.springframework.data.cassandra.convert.CassandraConverter;
 import com.datastax.driver.core.Statement;
 
 /**
- * Operations for interacting with Cassandra. These operations are used by the Repository implementation, but can also
- * be used directly when that is desired by the developer.
+ * Interface specifying a basic set of Cassandra operations. Implemented by {@link CassandraTemplate}. Not often used
+ * directly, but a useful option to enhance testability, as it can easily be mocked or stubbed.
  *
  * @author Alex Shvid
  * @author David Webb
@@ -49,226 +50,198 @@ public interface CassandraOperationsNG {
 	 */
 	CqlIdentifier getTableName(Class<?> entityClass);
 
-	/**
-	 * Executes the given select {@code query} on the entity table of the specified {@code type} backed by a Cassandra
-	 * {@link com.datastax.driver.core.ResultSet}.
-	 * <p>
-	 * Returns a {@link Iterator} that wraps the Cassandra {@link com.datastax.driver.core.ResultSet}.
-	 *
-	 * @param <T> element return type.
-	 * @param query query to execute. Must not be empty or {@literal null}.
-	 * @param entityClass Class type of the elements in the {@link Iterator} stream. Must not be {@literal null}.
-	 * @return an {@link Iterator} (stream) over the elements in the query result set.
-	 * @throws DataAccessException if there is any problem executing the query
-	 * @since 1.5
-	 */
-	<T> Iterator<T> stream(String query, Class<T> entityClass) throws DataAccessException;
+	// -------------------------------------------------------------------------
+	// Methods dealing with static CQL
+	// -------------------------------------------------------------------------
 
 	/**
-	 * Execute query and convert ResultSet to the list of entities.
+	 * Execute a {@code SELECT} query and convert the resulting items to a {@link List} of entities.
 	 *
 	 * @param cql must not be {@literal null}.
 	 * @param entityClass The entity type must not be {@literal null}.
 	 * @return the converted results
-	 * @throws DataAccessException if there is any problem executing the query
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
 	<T> List<T> select(String cql, Class<T> entityClass) throws DataAccessException;
 
 	/**
-	 * Execute the Select Query and convert to the list of entities.
+	 * Execute a {@code SELECT} query and convert the resulting items to a {@link Iterator} of entities.
+	 * <p>
+	 * Returns a {@link Iterator} that wraps the Cassandra {@link com.datastax.driver.core.ResultSet}.
 	 *
-	 * @param select must not be {@literal null}.
-	 * @param entityClass The entity type must not be {@literal null}.
-	 * @return the converted results
-	 * @throws DataAccessException if there is any problem executing the query
+	 * @param <T> element return type.
+	 * @param cql query to execute. Must not be empty or {@literal null}.
+	 * @param entityClass Class type of the elements in the {@link Iterator} stream. Must not be {@literal null}.
+	 * @return an {@link Iterator} (stream) over the elements in the query result set.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @since 1.5
 	 */
-	<T> List<T> select(Statement select, Class<T> entityClass) throws DataAccessException;
+	<T> Stream<T> stream(String cql, Class<T> entityClass) throws DataAccessException;
 
 	/**
-	 * Select objects for the given {@code entityClass} and {@code ids}.
-	 *
-	 * @param entityClass The entity type must not be {@literal null}.
-	 * @param ids must not be {@literal null}.
-	 * @return the converted results
-	 * @throws DataAccessException if there is any problem executing the query
-	 */
-	<T> List<T> selectBySimpleIds(Class<T> entityClass, Iterable<?> ids) throws DataAccessException;
-
-	/**
-	 * Execute the Select by {@code id} for the given {@code entityClass}.
-	 *
-	 * @param entityClass The entity type must not be {@literal null}.
-	 * @param id must not be {@literal null}.
-	 * @return the converted object or {@literal null}.
-	 * @throws DataAccessException if there is any problem executing the query
-	 */
-	<T> T selectOneById(Class<T> entityClass, Object id) throws DataAccessException;
-
-	/**
-	 * Execute CQL and convert ResultSet to the entity
+	 * Execute a {@code SELECT} query and convert the resulting item to an entity.
 	 *
 	 * @param cql must not be {@literal null}.
 	 * @param entityClass The entity type must not be {@literal null}.
 	 * @return the converted object or {@literal null}.
-	 * @throws DataAccessException if there is any problem executing the query
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
 	<T> T selectOne(String cql, Class<T> entityClass) throws DataAccessException;
 
+	// -------------------------------------------------------------------------
+	// Methods dealing with com.datastax.driver.core.Statement
+	// -------------------------------------------------------------------------
+
 	/**
-	 * Execute Select query and convert ResultSet to the entity
+	 * Execute a {@code SELECT} query and convert the resulting items to a {@link List} of entities.
 	 *
-	 * @param select must not be {@literal null}.
+	 * @param statement must not be {@literal null}.
+	 * @param entityClass The entity type must not be {@literal null}.
+	 * @return the converted results
+	 * @throws DataAccessException if there is any problem executing the query.
+	 */
+	<T> List<T> select(Statement statement, Class<T> entityClass) throws DataAccessException;
+
+	/**
+	 * Execute a {@code SELECT} query and convert the resulting items to a {@link Iterator} of entities.
+	 * <p>
+	 * Returns a {@link Iterator} that wraps the Cassandra {@link com.datastax.driver.core.ResultSet}.
+	 *
+	 * @param <T> element return type.
+	 * @param statement query to execute. Must not be empty or {@literal null}.
+	 * @param entityClass Class type of the elements in the {@link Iterator} stream. Must not be {@literal null}.
+	 * @return an {@link Iterator} (stream) over the elements in the query result set.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @since 1.5
+	 */
+	<T> Stream<T> stream(Statement statement, Class<T> entityClass) throws DataAccessException;
+
+	/**
+	 * Execute a {@code SELECT} query and convert the resulting item to an entity.
+	 *
+	 * @param statement must not be {@literal null}.
 	 * @param entityClass The entity type must not be {@literal null}.
 	 * @return the converted object or {@literal null}.
-	 * @throws DataAccessException if there is any problem executing the query
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> T selectOne(Statement select, Class<T> entityClass) throws DataAccessException;
+	<T> T selectOne(Statement statement, Class<T> entityClass) throws DataAccessException;
+
+	// -------------------------------------------------------------------------
+	// Methods dealing with entities
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Execute the Select by {@code id} for the given {@code entityClass}.
+	 *
+	 * @param id must not be {@literal null}.
+	 * @param entityClass The entity type must not be {@literal null}.
+	 * @return the converted object or {@literal null}.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 */
+	<T> T selectOneById(Object id, Class<T> entityClass) throws DataAccessException;
+
+	/**
+	 * Select objects for the given {@code entityClass} and {@code ids}.
+	 *
+	 * @param ids must not be {@literal null}.
+	 * @param entityClass The entity type must not be {@literal null}.
+	 * @return the converted results
+	 * @throws DataAccessException if there is any problem executing the query.
+	 */
+	<T> List<T> selectBySimpleIds(Iterable<?> ids, Class<T> entityClass) throws DataAccessException;
 
 	/**
 	 * Determine whether the row {@code entityClass} with the given {@code id} exists.
 	 *
-	 * @param entityClass The entity type must not be {@literal null}.
 	 * @param id must not be {@literal null}.
-	 * @return true, if the object exists
-	 * @throws DataAccessException if there is any problem executing the query
+	 * @param entityClass The entity type must not be {@literal null}.
+	 * @return true, if the object exists.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	boolean exists(Class<?> entityClass, Object id) throws DataAccessException;
+	boolean exists(Object id, Class<?> entityClass) throws DataAccessException;
 
 	/**
-	 * Returns the number of rows for the given {@code entityClass} by querying the table of the given entity class.
+	 * Returns the number of rows for the given entity class.
 	 *
-	 * @param entityClass The entity type must not be {@literal null}.
-	 * @return number of rows
-	 * @throws DataAccessException if there is any problem executing the query
+	 * @param entityClass must not be {@literal null}.
+	 * @return the number of existing entities.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
 	long count(Class<?> entityClass) throws DataAccessException;
 
 	/**
-	 * Insert the given entity.
+	 * Insert the given entity and return the entity if the insert was applied.
 	 *
-	 * @param entity The entity to insert
-	 * @return The entity given
-	 * @throws DataAccessException if there is any problem executing the query
+	 * @param entity The entity to insert, must not be {@literal null}.
+	 * @return the inserted entity.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
 	<T> T insert(T entity) throws DataAccessException;
 
 	/**
-	 * Insert the given entity.
+	 * Insert the given entity applying {@link WriteOptions} and return the entity if the insert was applied.
 	 *
-	 * @param entity The entity to insert
-	 * @param options The {@link WriteOptions} to use.
-	 * @return The entity given
-	 * @throws DataAccessException if there is any problem executing the query
+	 * @param entity The entity to insert, must not be {@literal null}.
+	 * @param options may be {@literal null}.
+	 * @return the inserted entity.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
 	<T> T insert(T entity, WriteOptions options) throws DataAccessException;
 
 	/**
-	 * Insert the given list of entities.
+	 * Update the given entity and return the entity if the update was applied.
 	 *
-	 * @param entities The entities to insert.
-	 * @return The entities given.
-	 * @throws DataAccessException if there is any problem executing the query
-	 */
-	<T> List<T> insert(List<T> entities) throws DataAccessException;
-
-	/**
-	 * Insert the given list of entities.
-	 *
-	 * @param entities The entities to insert.
-	 * @param options The {@link WriteOptions} to use.
-	 * @return The entities given.
-	 * @throws DataAccessException if there is any problem executing the query
-	 */
-	<T> List<T> insert(List<T> entities, WriteOptions options) throws DataAccessException;
-
-	/**
-	 * Update the given entity.
-	 *
-	 * @param entity The entity to update
-	 * @return The entity given
-	 * @throws DataAccessException if there is any problem executing the query
+	 * @param entity The entity to update, must not be {@literal null}.
+	 * @return the updated entity.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
 	<T> T update(T entity) throws DataAccessException;
 
 	/**
-	 * Update the given entity.
+	 * Update the given entity applying {@link WriteOptions} and return the entity if the update was applied.
 	 *
-	 * @param entity The entity to update
-	 * @param options The {@link WriteOptions} to use.
-	 * @return The entity given
-	 * @throws DataAccessException if there is any problem executing the query
+	 * @param entity The entity to update, must not be {@literal null}.
+	 * @param options may be {@literal null}.
+	 * @return the updated entity.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
 	<T> T update(T entity, WriteOptions options) throws DataAccessException;
 
 	/**
-	 * Update the given list of entities.
-	 *
-	 * @param entities The entities to update.
-	 * @return The entities given.
-	 * @throws DataAccessException if there is any problem executing the query
-	 */
-	<T> List<T> update(List<T> entities) throws DataAccessException;
-
-	/**
-	 * Update the given list of entities.
-	 *
-	 * @param entities The entities to update.
-	 * @param options The {@link WriteOptions} to use.
-	 * @return The entities given.
-	 * @throws DataAccessException if there is any problem executing the query
-	 */
-	<T> List<T> update(List<T> entities, WriteOptions options) throws DataAccessException;
-
-	/**
 	 * Remove the given object from the table by id.
 	 *
-	 * @param entityClass The entity type must not be {@literal null}.
 	 * @param id must not be {@literal null}.
-	 * @throws DataAccessException if there is any problem executing the query
+	 * @param entityClass The entity type must not be {@literal null}.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	void deleteById(Class<?> entityClass, Object id) throws DataAccessException;
+	boolean deleteById(Object id, Class<?> entityClass) throws DataAccessException;
 
 	/**
-	 * Remove the given object from the table by id.
+	 * Delete the given entity and return the entity if the delete was applied.
 	 *
 	 * @param entity must not be {@literal null}.
-	 * @throws DataAccessException if there is any problem executing the query
+	 * @return the deleted entity.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> void delete(T entity) throws DataAccessException;
+	<T> T delete(T entity) throws DataAccessException;
 
 	/**
-	 * Remove the given object from the table by id.
+	 * Delete the given entity applying {@link QueryOptions} and return the entity if the delete was applied.
 	 *
 	 * @param entity must not be {@literal null}.
 	 * @param options may be {@literal null}.
-	 * @throws DataAccessException if there is any problem executing the query
+	 * @return the deleted entity.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> void delete(T entity, QueryOptions options) throws DataAccessException;
+	<T> T delete(T entity, QueryOptions options) throws DataAccessException;
 
 	/**
-	 * Remove the given objects from the table by id.
-	 *
-	 * @param entities must not be {@literal null}.
-	 * @throws DataAccessException if there is any problem executing the query
-	 */
-	<T> void delete(List<T> entities) throws DataAccessException;
-
-	/**
-	 * Remove the given objects from the table by id.
-	 *
-	 * @param entities must not be {@literal null}.
-	 * @param options may be {@literal null}.
-	 * @throws DataAccessException if there is any problem executing the query
-	 */
-	<T> void delete(List<T> entities, QueryOptions options) throws DataAccessException;
-
-	/**
-	 * Deletes all entities of a given class.
+	 * Execute a {@code TRUNCATE} query to remove all entities of a given class.
 	 * 
 	 * @param entityClass The entity type must not be {@literal null}.
-	 * @throws DataAccessException if there is any problem executing the query
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> void deleteAll(Class<T> entityClass) throws DataAccessException;
+	void truncate(Class<?> entityClass) throws DataAccessException;
 
 	/**
 	 * Returns a new {@link CassandraBatchOperations}. Each {@link CassandraBatchOperations} instance can be executed only

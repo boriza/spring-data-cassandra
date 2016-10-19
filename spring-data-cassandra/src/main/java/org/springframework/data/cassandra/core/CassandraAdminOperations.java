@@ -41,7 +41,8 @@ public interface CassandraAdminOperations extends CassandraOperations {
 	 * @param entityClass The class whose fields determine the columns created.
 	 * @param optionsByName Table options, given by the string option name and the appropriate option value.
 	 */
-	void createTable(boolean ifNotExists, CqlIdentifier tableName, Class<?> entityClass, Map<String, Object> optionsByName);
+	void createTable(boolean ifNotExists, CqlIdentifier tableName, Class<?> entityClass,
+			Map<String, Object> optionsByName);
 
 	/**
 	 * Add columns to the given table from the given class. If parameter dropRemovedAttributColumns is true, then this
@@ -77,4 +78,5 @@ public interface CassandraAdminOperations extends CassandraOperations {
 	 * @return
 	 */
 	TableMetadata getTableMetadata(String keyspace, CqlIdentifier tableName);
+
 }

@@ -1,7 +1,7 @@
 /*
  * Copyright 2016 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
+ * Licensed under the Apache License, Version 2.0 (the "License")
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
@@ -17,18 +17,19 @@ package org.springframework.data.cassandra.core;
 
 import java.util.List;
 
+import org.springframework.cassandra.core.AsyncCqlOperations;
 import org.springframework.cassandra.core.QueryOptions;
+import org.springframework.cassandra.core.ReactiveCqlOperations;
 import org.springframework.cassandra.core.WriteOptions;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.cassandra.convert.CassandraConverter;
 import org.springframework.util.concurrent.ListenableFuture;
 
 import com.datastax.driver.core.Statement;
 
-import reactor.core.publisher.Mono;
-
 /**
- * Interface specifying a basic set of Cassandra operations. Implemented by {@link AsyncCassandraTemplate}. Not often
- * used directly, but a useful option to enhance testability, as it can easily be mocked or stubbed.
+ * Interface specifying a basic set of asynchronous Cassandra operations. Implemented by {@link AsyncCassandraTemplate}.
+ * Not often used directly, but a useful option to enhance testability, as it can easily be mocked or stubbed.
  *
  * @author Mark Paluch
  * @since 2.0
@@ -44,210 +45,190 @@ public interface AsyncCassandraOperations {
 	 * Execute a {@code SELECT} query and convert the resulting items to a {@link List} of entities.
 	 *
 	 * @param cql must not be {@literal null}.
-	 * @param entityType The entity type must not be {@literal null}.
+	 * @param entityClass The entity type must not be {@literal null}.
 	 * @return the converted results
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> ListenableFuture<List<T>> select(String cql, Class<T> entityType);
+	<T> ListenableFuture<List<T>> select(String cql, Class<T> entityClass) throws DataAccessException;
 
 	/**
 	 * Execute a {@code SELECT} query and convert the resulting items notifying {@link ObjectCallback} for each entity.
 	 *
 	 * @param cql must not be {@literal null}.
 	 * @param objectCallback object that will extract results, one object at a time, must not be {@literal null}.
-	 * @param entityType The entity type must not be {@literal null}.
+	 * @param entityClass The entity type must not be {@literal null}.
 	 * @return the completion handle
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> ListenableFuture<Void> select(String cql, ObjectCallback<T> objectCallback, Class<T> entityType);
+	<T> ListenableFuture<Void> select(String cql, ObjectCallback<T> objectCallback, Class<T> entityClass)
+			throws DataAccessException;
 
 	/**
 	 * Execute a {@code SELECT} query and convert the resulting item to an entity.
 	 *
 	 * @param cql must not be {@literal null}.
-	 * @param entityType The entity type must not be {@literal null}.
+	 * @param entityClass The entity type must not be {@literal null}.
 	 * @return the converted object or {@literal null}.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> ListenableFuture<T> selectOne(String cql, Class<T> entityType);
+	<T> ListenableFuture<T> selectOne(String cql, Class<T> entityClass) throws DataAccessException;
 
 	// -------------------------------------------------------------------------
 	// Methods dealing with com.datastax.driver.core.Statement
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Execute a {@code SELECT} query and convert the resulting items to a stream of entities.
+	 * Execute a {@code SELECT} query and convert the resulting items to a {@link List} of entities.
 	 *
-	 * @param select must not be {@literal null}.
-	 * @param entityType The entity type must not be {@literal null}.
+	 * @param statement must not be {@literal null}.
+	 * @param entityClass The entity type must not be {@literal null}.
 	 * @return the converted results
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> ListenableFuture<List<T>> select(Statement select, Class<T> entityType);
+	<T> ListenableFuture<List<T>> select(Statement statement, Class<T> entityClass) throws DataAccessException;
 
 	/**
 	 * Execute a {@code SELECT} query and convert the resulting items notifying {@link ObjectCallback} for each entity.
 	 *
-	 * @param select must not be {@literal null}.
+	 * @param statement must not be {@literal null}.
 	 * @param objectCallback object that will extract results, one object at a time, must not be {@literal null}.
-	 * @param entityType The entity type must not be {@literal null}.
+	 * @param entityClass The entity type must not be {@literal null}.
 	 * @return the completion handle
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> ListenableFuture<Void> select(Statement select, ObjectCallback<T> objectCallback, Class<T> entityType);
+	<T> ListenableFuture<Void> select(Statement statement, ObjectCallback<T> objectCallback, Class<T> entityClass)
+			throws DataAccessException;
 
 	/**
 	 * Execute a {@code SELECT} query and convert the resulting item to an entity.
 	 *
-	 * @param select must not be {@literal null}.
-	 * @param entityType The entity type must not be {@literal null}.
+	 * @param statement must not be {@literal null}.
+	 * @param entityClass The entity type must not be {@literal null}.
 	 * @return the converted object or {@literal null}.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> ListenableFuture<T> selectOne(Statement select, Class<T> entityType);
+	<T> ListenableFuture<T> selectOne(Statement statement, Class<T> entityClass) throws DataAccessException;
 
 	// -------------------------------------------------------------------------
 	// Methods dealing with entities
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Execute the Select by {@code id} for the given {@code entityType}.
+	 * Execute the Select by {@code id} for the given {@code entityClass}.
 	 *
 	 * @param id must not be {@literal null}.
-	 * @param entityType The entity type must not be {@literal null}.
+	 * @param entityClass The entity type must not be {@literal null}.
 	 * @return the converted object or {@literal null}.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> ListenableFuture<T> selectOneById(Object id, Class<T> entityType);
+	<T> ListenableFuture<T> selectOneById(Object id, Class<T> entityClass) throws DataAccessException;
 
 	/**
-	 * Determine whether the row {@code entityType} with the given {@code id} exists.
+	 * Determine whether the row {@code entityClass} with the given {@code id} exists.
 	 *
 	 * @param id must not be {@literal null}.
-	 * @param entityType must not be {@literal null}.
-	 * @return true, if the object exists
+	 * @param entityClass must not be {@literal null}.
+	 * @return {@literal true}, if the object exists.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	ListenableFuture<Boolean> exists(Object id, Class<?> entityType);
+	ListenableFuture<Boolean> exists(Object id, Class<?> entityClass) throws DataAccessException;
 
 	/**
 	 * Returns the number of rows for the given entity class.
 	 *
 	 * @param entityClass must not be {@literal null}.
-	 * @return
+	 * @return the number of existing entities.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	ListenableFuture<Long> count(Class<?> entityClass);
+	ListenableFuture<Long> count(Class<?> entityClass) throws DataAccessException;
 
 	/**
-	 * Insert the given entity and emit the entity if the insert was applied.
+	 * Insert the given entity and return the entity if the insert was applied.
 	 *
 	 * @param entity The entity to insert, must not be {@literal null}.
-	 * @return The entity given
+	 * @return the inserted entity.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> ListenableFuture<T> insert(T entity);
+	<T> ListenableFuture<T> insert(T entity) throws DataAccessException;
 
 	/**
-	 * Insert the given entity applying {@link WriteOptions} and emit the entity if the insert was applied.
+	 * Insert the given entity applying {@link WriteOptions} and return the entity if the insert was applied.
 	 *
 	 * @param entity The entity to insert, must not be {@literal null}.
 	 * @param options may be {@literal null}.
-	 * @return The entity given
+	 * @return the inserted entity.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> ListenableFuture<T> insert(T entity, WriteOptions options);
+	<T> ListenableFuture<T> insert(T entity, WriteOptions options) throws DataAccessException;
 
 	/**
-	 * Insert the given entities and emit the entity if the insert was applied.
-	 *
-	 * @param entities The entities to insert, must not be {@literal null}.
-	 * @return The entities given.
-	 */
-	<T> ListenableFuture<T> insert(Iterable<? extends T> entities);
-
-	/**
-	 * Insert the given entities applying {@link WriteOptions} and emit the entity if the insert was applied.
-	 *
-	 * @param entities The entities to insert, must not be {@literal null}.
-	 * @param options may be {@literal null}.
-	 * @return The entities given.
-	 */
-	<T> ListenableFuture<T> insert(Iterable<? extends T> entities, WriteOptions options);
-
-	/**
-	 * Update the given entity and emit the entity if the update was applied.
+	 * Update the given entity and return the entity if the update was applied.
 	 *
 	 * @param entity The entity to update, must not be {@literal null}.
-	 * @return The entity given
+	 * @return the updated entity.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> Mono<T> update(T entity);
+	<T> ListenableFuture<T> update(T entity) throws DataAccessException;
 
 	/**
-	 * Update the given entity applying {@link WriteOptions} and emit the entity if the update was applied.
+	 * Update the given entity applying {@link WriteOptions} and return the entity if the update was applied.
 	 *
 	 * @param entity The entity to update, must not be {@literal null}.
 	 * @param options may be {@literal null}.
-	 * @return The entity given
+	 * @return the updated entity.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> Mono<T> update(T entity, WriteOptions options);
-
-	/**
-	 * Update the given entities and emit the entity if the update was applied.
-	 *
-	 * @param entities The entities to update, must not be {@literal null}.
-	 * @return The entities given.
-	 */
-	<T> ListenableFuture<T> update(Iterable<? extends T> entities);
-
-	/**
-	 * Update the given entities applying {@link WriteOptions} and emit the entity if the update was applied.
-	 *
-	 * @param entities The entities to update, must not be {@literal null}.
-	 * @param options may be {@literal null}.
-	 * @return The entities given.
-	 */
-	<T> ListenableFuture<T> update(Iterable<? extends T> entities, WriteOptions options);
+	<T> ListenableFuture<T> update(T entity, WriteOptions options) throws DataAccessException;
 
 	/**
 	 * Remove the given object from the table by id.
 	 *
 	 * @param id must not be {@literal null}.
-	 * @param entityType The entity type must not be {@literal null}.
+	 * @param entityClass The entity type must not be {@literal null}.
+	 * @return {@literal true} if the deletion was applied.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	Mono<Boolean> deleteById(Object id, Class<?> entityType);
+	ListenableFuture<Boolean> deleteById(Object id, Class<?> entityClass) throws DataAccessException;
 
 	/**
-	 * Delete the given entity and emit the entity if the delete was applied.
+	 * Delete the given entity and return the entity if the delete was applied.
 	 *
 	 * @param entity must not be {@literal null}.
+	 * @return the deleted entity.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> Mono<T> delete(T entity);
+	<T> ListenableFuture<T> delete(T entity) throws DataAccessException;
 
 	/**
-	 * Delete the given entity applying {@link QueryOptions} and emit the entity if the delete was applied.
+	 * Delete the given entity applying {@link QueryOptions} and return the entity if the delete was applied.
 	 *
 	 * @param entity must not be {@literal null}.
 	 * @param options may be {@literal null}.
+	 * @return the deleted entity.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> Mono<T> delete(T entity, QueryOptions options);
-
-	/**
-	 * Delete the given entities and emit the entity if the delete was applied.
-	 *
-	 * @param entities must not be {@literal null}.
-	 */
-	<T> ListenableFuture<T> delete(Iterable<? extends T> entities);
-
-	/**
-	 * Delete the given entities applying {@link QueryOptions} and emit the entity if the delete was applied.
-	 *
-	 * @param entities must not be {@literal null}.
-	 * @param options may be {@literal null}.
-	 */
-	<T> ListenableFuture<T> delete(Iterable<? extends T> entities, QueryOptions options);
+	<T> ListenableFuture<T> delete(T entity, QueryOptions options) throws DataAccessException;
 
 	/**
 	 * Execute a {@code TRUNCATE} query to remove all entities of a given class.
 	 * 
-	 * @param entityType The entity type must not be {@literal null}.
+	 * @param entityClass The entity type must not be {@literal null}.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	ListenableFuture<Void> truncate(Class<?> entityType);
+	ListenableFuture<Void> truncate(Class<?> entityClass) throws DataAccessException;
 
 	/**
 	 * Returns the underlying {@link CassandraConverter}.
 	 *
-	 * @return the converter.
+	 * @return the underlying {@link CassandraConverter}.
 	 */
 	CassandraConverter getConverter();
 
+	/**
+	 * Expose the underlying {@link AsyncCqlOperationsOperations} to allow asynchronous CQL operations.
+	 *
+	 * @return the underlying {@link AsyncCqlOperations}.
+	 * @see AsyncCqlOperations
+	 */
+	AsyncCqlOperations getAsyncCqlOperations();
 }

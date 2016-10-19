@@ -99,7 +99,7 @@ public class CqlOperationsIntegrationTests extends AbstractKeyspaceCreatingInteg
 		List<MyHost> ring = (List<MyHost>) cqlTemplate.describeRing(new HostMapper<MyHost>() {
 
 			@Override
-			public Collection<MyHost> mapHosts(Set<Host> host) throws DriverException {
+			public Collection<MyHost> mapHosts(Iterable<Host> host) throws DriverException {
 
 				List<MyHost> list = new LinkedList<CqlOperationsIntegrationTests.MyHost>();
 
@@ -270,14 +270,14 @@ public class CqlOperationsIntegrationTests extends AbstractKeyspaceCreatingInteg
 		cqlTemplate.execute(new SessionCallback<Object>() {
 
 			@Override
-			public Object doInSession(Session s) throws DataAccessException {
+			public Object doInSession(Session session) throws DataAccessException {
 
 				String cql = BOOK_INSERT;
 
-				PreparedStatement ps = s.prepare(cql);
+				PreparedStatement ps = session.prepare(cql);
 				BoundStatement bs = ps.bind(isbn, title, author, pages);
 
-				s.execute(bs);
+				session.execute(bs);
 
 				return null;
 

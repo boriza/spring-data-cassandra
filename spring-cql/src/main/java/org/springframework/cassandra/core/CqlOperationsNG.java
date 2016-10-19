@@ -93,7 +93,7 @@ public interface CqlOperationsNG {
 	 * @param cql static CQL to execute, must not be empty or {@literal null}.
 	 * @param rch object that will extract results, one row at a time, must not be {@literal null}.
 	 * @throws DataAccessException if there is any problem executing the query
-	 * @see #query(String, Object[], RowCallbackHandler)
+	 * @see #query(String, RowCallbackHandler, Object[])
 	 */
 	void query(String cql, RowCallbackHandler rch) throws DataAccessException;
 
@@ -271,7 +271,7 @@ public interface CqlOperationsNG {
 	 * @param statement static CQL {@link Statement}, must not be {@literal null}.
 	 * @param rch object that will extract results, one row at a time, must not be {@literal null}.
 	 * @throws DataAccessException if there is any problem executing the query
-	 * @see #query(String, Object[], RowCallbackHandler)
+	 * @see #query(String, RowCallbackHandler, Object[])
 	 */
 	void query(Statement statement, RowCallbackHandler rch) throws DataAccessException;
 
@@ -430,7 +430,7 @@ public interface CqlOperationsNG {
 	 * @return a result object returned by the action, or {@literal null}.
 	 * @throws DataAccessException if there is any problem
 	 */
-	<T> List<T> execute(PreparedStatementCreator psc, PreparedStatementCallback<T> action) throws DataAccessException;
+	<T> T execute(PreparedStatementCreator psc, PreparedStatementCallback<T> action) throws DataAccessException;
 
 	/**
 	 * Execute a CQL data access operation, implemented as callback action working on a CQL {@link PreparedStatement}.
@@ -692,7 +692,7 @@ public interface CqlOperationsNG {
 	 * @throws DataAccessException if there is any problem executing the query.
 	 * @see #queryForList(String)
 	 */
-	Map<String, Object> queryForList(String cql, Object... args) throws DataAccessException;
+	List<Map<String, Object>> queryForList(String cql, Object... args) throws DataAccessException;
 
 	/**
 	 * Query given CQL to create a prepared statement from CQL and a list of arguments to bind to the query, expecting a

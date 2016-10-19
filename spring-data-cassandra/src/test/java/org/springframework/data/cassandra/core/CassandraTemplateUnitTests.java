@@ -51,7 +51,7 @@ public class CassandraTemplateUnitTests {
 
 	private CassandraTemplate template;
 
-	@Mock private Session mockSession;
+	@Mock Session mockSession;
 
 	@Before
 	public void setup() {

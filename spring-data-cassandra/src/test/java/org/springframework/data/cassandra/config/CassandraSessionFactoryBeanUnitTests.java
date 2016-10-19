@@ -62,11 +62,9 @@ public class CassandraSessionFactoryBeanUnitTests {
 
 	@Rule public ExpectedException exception = ExpectedException.none();
 
-	@Mock private CassandraConverter mockConverter;
-
-	@Mock private Cluster mockCluster;
-
-	@Mock private Session mockSession;
+	@Mock CassandraConverter mockConverter;
+	@Mock Cluster mockCluster;
+	@Mock Session mockSession;
 
 	private CassandraSessionFactoryBean factoryBean;
 
