@@ -18,22 +18,39 @@ package org.springframework.cassandra.core;
 import org.springframework.dao.DataAccessException;
 
 import com.datastax.driver.core.Session;
+import com.datastax.driver.core.exceptions.DriverException;
 
 /**
- * Interface for operations on a Cassandra Session.
- * 
+ * Generic callback interface for code that operates on a Cassandra {@link Session}. Allows to execute any number of
+ * operations on a single session, using any type and number of statements.
+ * <p>
+ * This is particularly useful for delegating to existing data access code that expects a {@link Session} to work on and
+ * throws {@link DriverException}. For newly written code, it is strongly recommended to use {@link CqlTemplate}'s more
+ * specific operations, for example a {@code query} or {@code update} variant.
+ *
  * @author David Webb
- * @param <T>
+ * @author Mark Paluch
+ * @see CqlTemplate#execute(SessionCallback)
+ * @see CqlTemplate#query
  */
 public interface SessionCallback<T> {
 
 	/**
-	 * Perform the operation in the given Session
+	 * Gets called by {@link CqlTemplate#execute} with an active Cassandra {@link Session}. Does not need to care about
+	 * activating or closing the {@link Session}.
+	 * <p>
+	 * Allows for returning a result object created within the callback, i.e. a domain object or a collection of domain
+	 * objects. Note that there's special support for single step actions: see {@link CqlTemplate#queryForObject} etc. A
+	 * thrown {@link RuntimeException} is treated as application exception: it gets propagated to the caller of the
+	 * template.
 	 * 
-	 * @param s
-	 * @return
-	 * @throws DataAccessException
+	 * @param session active Cassandra Session, must not be {@literal null}.
+	 * @return a result object, or {@code null} if none.
+	 * @throws DriverException if thrown by a Session method, to be auto-converted to a {@link DataAccessException}.
+	 * @throws DataAccessException in case of custom exceptions.
+	 * @see CqlTemplate#queryForObject(String, Class)
+	 * @see CqlTemplateNG#queryForResultSet(String)
 	 */
-	T doInSession(Session s) throws DataAccessException;
+	T doInSession(Session session) throws DriverException, DataAccessException;
 
 }
