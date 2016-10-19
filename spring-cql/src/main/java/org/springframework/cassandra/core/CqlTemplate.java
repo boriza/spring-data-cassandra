@@ -626,7 +626,7 @@ public class CqlTemplate extends CassandraAccessor implements CqlOperations {
 
 	@Override
 	public List<RingMember> describeRing() {
-		return new ArrayList<RingMember>(describeRing(new RingMemberHostMapper()));
+		return new ArrayList<RingMember>(describeRing(RingMemberHostMapper.INSTANCE));
 	}
 
 	/**
