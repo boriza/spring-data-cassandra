@@ -16,10 +16,10 @@
 package org.springframework.data.cassandra.core;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 import org.springframework.cassandra.core.AsyncCqlOperations;
 import org.springframework.cassandra.core.QueryOptions;
-import org.springframework.cassandra.core.ReactiveCqlOperations;
 import org.springframework.cassandra.core.WriteOptions;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.cassandra.convert.CassandraConverter;
@@ -52,15 +52,16 @@ public interface AsyncCassandraOperations {
 	<T> ListenableFuture<List<T>> select(String cql, Class<T> entityClass) throws DataAccessException;
 
 	/**
-	 * Execute a {@code SELECT} query and convert the resulting items notifying {@link ObjectCallback} for each entity.
+	 * Execute a {@code SELECT} query and convert the resulting items notifying {@link Consumer} for each entity.
 	 *
 	 * @param cql must not be {@literal null}.
-	 * @param objectCallback object that will extract results, one object at a time, must not be {@literal null}.
+	 * @param entityConsumer object that will be notified on each entity, one object at a time, must not be
+	 *          {@literal null}.
 	 * @param entityClass The entity type must not be {@literal null}.
 	 * @return the completion handle
 	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> ListenableFuture<Void> select(String cql, ObjectCallback<T> objectCallback, Class<T> entityClass)
+	<T> ListenableFuture<Void> select(String cql, Consumer<T> entityConsumer, Class<T> entityClass)
 			throws DataAccessException;
 
 	/**
@@ -88,15 +89,16 @@ public interface AsyncCassandraOperations {
 	<T> ListenableFuture<List<T>> select(Statement statement, Class<T> entityClass) throws DataAccessException;
 
 	/**
-	 * Execute a {@code SELECT} query and convert the resulting items notifying {@link ObjectCallback} for each entity.
+	 * Execute a {@code SELECT} query and convert the resulting items notifying {@link Consumer} for each entity.
 	 *
 	 * @param statement must not be {@literal null}.
-	 * @param objectCallback object that will extract results, one object at a time, must not be {@literal null}.
+	 * @param entityConsumer object that will be notified on each entity, one object at a time, must not be
+	 *          {@literal null}.
 	 * @param entityClass The entity type must not be {@literal null}.
 	 * @return the completion handle
 	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> ListenableFuture<Void> select(Statement statement, ObjectCallback<T> objectCallback, Class<T> entityClass)
+	<T> ListenableFuture<Void> select(Statement statement, Consumer<T> entityConsumer, Class<T> entityClass)
 			throws DataAccessException;
 
 	/**

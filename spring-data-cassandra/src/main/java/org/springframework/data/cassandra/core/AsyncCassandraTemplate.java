@@ -17,6 +17,7 @@ package org.springframework.data.cassandra.core;
 
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.springframework.cassandra.core.AsyncCqlOperations;
@@ -151,14 +152,14 @@ public class AsyncCassandraTemplate implements AsyncCassandraOperations {
 	}
 
 	@Override
-	public <T> ListenableFuture<Void> select(String cql, ObjectCallback<T> objectCallback, Class<T> entityClass)
+	public <T> ListenableFuture<Void> select(String cql, Consumer<T> entityConsumer, Class<T> entityClass)
 			throws DataAccessException {
 
 		Assert.hasText(cql, "Statement must not be empty");
-		Assert.notNull(objectCallback, "ObjectCallback must not be empty");
+		Assert.notNull(entityConsumer, "Entity Consumer must not be null");
 		Assert.notNull(entityClass, "Entity type must not be null");
 
-		return select(new SimpleStatement(cql), objectCallback, entityClass);
+		return select(new SimpleStatement(cql), entityConsumer, entityClass);
 	}
 
 	/*
@@ -192,15 +193,15 @@ public class AsyncCassandraTemplate implements AsyncCassandraOperations {
 	}
 
 	@Override
-	public <T> ListenableFuture<Void> select(Statement statement, ObjectCallback<T> objectCallback, Class<T> entityClass)
+	public <T> ListenableFuture<Void> select(Statement statement, Consumer<T> entityConsumer, Class<T> entityClass)
 			throws DataAccessException {
 
 		Assert.notNull(statement, "Statement must not be null");
-		Assert.notNull(objectCallback, "ObjectCallback must not be empty");
+		Assert.notNull(entityConsumer, "Entity Consumer must not be empty");
 		Assert.notNull(entityClass, "Entity type must not be null");
 
 		return cqlOperations.query(statement, (row) -> {
-			objectCallback.onObject(converter.read(entityClass, row));
+			entityConsumer.accept(converter.read(entityClass, row));
 		});
 	}
 
