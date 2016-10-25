@@ -80,8 +80,8 @@ public class ParameterConversionIntegrationTests extends AbstractSpringDataEmbed
 
 		deleteAllEntities();
 
-		template.execute("CREATE INDEX IF NOT EXISTS contact_address ON contact (address);");
-		template.execute("CREATE INDEX IF NOT EXISTS contact_addresses ON contact (addresses);");
+		template.getCqlOperations().execute("CREATE INDEX IF NOT EXISTS contact_address ON contact (address);");
+		template.getCqlOperations().execute("CREATE INDEX IF NOT EXISTS contact_addresses ON contact (addresses);");
 
 		walter = new Contact("Walter");
 		walter.setAddress(new Address("Albuquerque", "USA"));

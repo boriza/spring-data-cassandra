@@ -15,7 +15,6 @@
  */
 package org.springframework.data.cassandra.core;
 
-import java.util.List;
 import java.util.Map;
 
 import org.slf4j.Logger;
@@ -23,11 +22,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.cassandra.core.SessionCallback;
 import org.springframework.cassandra.core.cql.CqlIdentifier;
 import org.springframework.cassandra.core.cql.generator.CreateTableCqlGenerator;
+import org.springframework.cassandra.core.cql.generator.DropTableCqlGenerator;
+import org.springframework.cassandra.core.keyspace.CreateTableSpecification;
 import org.springframework.cassandra.core.keyspace.DropTableSpecification;
-import org.springframework.dao.DataAccessException;
 import org.springframework.data.cassandra.convert.CassandraConverter;
 import org.springframework.data.cassandra.mapping.CassandraPersistentEntity;
-import org.springframework.data.cassandra.util.CqlUtils;
 import org.springframework.util.Assert;
 
 import com.datastax.driver.core.Session;
@@ -56,63 +55,11 @@ public class CassandraAdminTemplate extends CassandraTemplate implements Cassand
 	public void createTable(final boolean ifNotExists, final CqlIdentifier tableName, Class<?> entityClass,
 			Map<String, Object> optionsByName) {
 
-		final CassandraPersistentEntity<?> entity = getCassandraMappingContext().getPersistentEntity(entityClass);
+		CassandraPersistentEntity<?> entity = getPersistentEntity(entityClass);
+		CreateTableSpecification createTableSpecification = getConverter().getMappingContext()
+				.getCreateTableSpecificationFor(entity).ifNotExists(ifNotExists);
 
-		execute(new SessionCallback<Object>() {
-			@Override
-			public Object doInSession(Session s) throws DataAccessException {
-
-				String cql = new CreateTableCqlGenerator(getCassandraMappingContext().
-						getCreateTableSpecificationFor(entity).ifNotExists(ifNotExists)).toCql();
-
-				log.debug(cql);
-
-				s.execute(cql);
-				return null;
-			}
-		});
-	}
-
-	@Override
-	public void alterTable(CqlIdentifier tableName, Class<?> entityClass, boolean dropRemovedAttributeColumns) {
-		throw new UnsupportedOperationException("not yet implemented");
-	}
-
-	@Override
-	public void replaceTable(CqlIdentifier tableName, Class<?> entityClass, Map<String, Object> optionsByName) {
-
-		dropTable(tableName);
-		createTable(false, tableName, entityClass, optionsByName);
-	}
-
-	/**
-	 * Create a list of query operations to alter the table for the given entity
-	 *
-	 * @param entityClass
-	 * @param tableName
-	 */
-	protected void doAlterTable(Class<?> entityClass, String keyspace, CqlIdentifier tableName) {
-
-		CassandraPersistentEntity<?> entity = getCassandraMappingContext().getPersistentEntity(entityClass);
-
-		Assert.notNull(entity);
-
-		final TableMetadata tableMetadata = getTableMetadata(keyspace, tableName);
-		final List<String> queryList = CqlUtils.alterTable(tableName.toCql(), entity, tableMetadata);
-
-		execute(new SessionCallback<Object>() {
-
-			@Override
-			public Object doInSession(Session s) throws DataAccessException {
-
-				for (String q : queryList) {
-					log.info(q);
-					s.execute(q);
-				}
-
-				return null;
-			}
-		});
+		getCqlOperations().execute(CreateTableCqlGenerator.toCql(createTableSpecification));
 	}
 
 	public void dropTable(Class<?> entityClass) {
@@ -121,22 +68,15 @@ public class CassandraAdminTemplate extends CassandraTemplate implements Cassand
 
 	@Override
 	public void dropTable(CqlIdentifier tableName) {
-
-		log.info("Dropping table => " + tableName);
-
-		execute(DropTableSpecification.dropTable(tableName));
+		getCqlOperations().execute(DropTableCqlGenerator.toCql(DropTableSpecification.dropTable(tableName)));
 	}
 
 	@Override
-	public TableMetadata getTableMetadata(final String keyspace, final CqlIdentifier tableName) {
+	public TableMetadata getTableMetadata(String keyspace, CqlIdentifier tableName) {
 
-		Assert.notNull(tableName);
+		Assert.notNull(tableName, "Table name must not be null");
 
-		return execute(new SessionCallback<TableMetadata>() {
-			@Override
-			public TableMetadata doInSession(Session s) {
-				return s.getCluster().getMetadata().getKeyspace(keyspace).getTable(tableName.toCql());
-			}
-		});
+		return getCqlOperations().execute((SessionCallback<TableMetadata>) session -> session.getCluster().getMetadata()
+				.getKeyspace(keyspace).getTable(tableName.toCql()));
 	}
 }

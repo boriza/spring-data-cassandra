@@ -26,6 +26,7 @@ import com.datastax.driver.core.TableMetadata;
  * 
  * @author David Webb
  * @author Matthew T. Adams
+ * @author Mark Paluch
  */
 public interface CassandraAdminOperations extends CassandraOperations {
 
@@ -45,27 +46,6 @@ public interface CassandraAdminOperations extends CassandraOperations {
 			Map<String, Object> optionsByName);
 
 	/**
-	 * Add columns to the given table from the given class. If parameter dropRemovedAttributColumns is true, then this
-	 * effectively becomes a synchronization operation between the class's fields and the existing table's columns.
-	 * 
-	 * @param tableName The name of the existing table.
-	 * @param entityClass The class whose fields determine the columns added.
-	 * @param dropRemovedAttributeColumns Whether to drop columns that exist on the table but that don't have
-	 *          corresponding fields in the class. If true, this effectively becomes a synchronziation operation.
-	 */
-	void alterTable(CqlIdentifier tableName, Class<?> entityClass, boolean dropRemovedAttributeColumns);
-
-	/**
-	 * Drops the existing table with the given name and creates a new one; basically a {@link #dropTable(String)} followed
-	 * by a {@link #createTable(boolean, String, Class, Map)}.
-	 * 
-	 * @param tableName The name of the table.
-	 * @param entityClass The class whose fields determine the new table's columns.
-	 * @param optionsByName Table options, given by the string option name and the appropriate option value.
-	 */
-	void replaceTable(CqlIdentifier tableName, Class<?> entityClass, Map<String, Object> optionsByName);
-
-	/**
 	 * Drops the named table.
 	 * 
 	 * @param tableName The name of the table.
@@ -78,5 +58,4 @@ public interface CassandraAdminOperations extends CassandraOperations {
 	 * @return
 	 */
 	TableMetadata getTableMetadata(String keyspace, CqlIdentifier tableName);
-
 }

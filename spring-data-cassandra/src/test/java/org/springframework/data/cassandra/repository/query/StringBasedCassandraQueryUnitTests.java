@@ -30,6 +30,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
+import org.springframework.cassandra.core.CqlOperations;
+import org.springframework.cassandra.core.ReactiveSessionCallback;
+import org.springframework.cassandra.core.SessionCallback;
 import org.springframework.data.cassandra.convert.MappingCassandraConverter;
 import org.springframework.data.cassandra.core.CassandraOperations;
 import org.springframework.data.cassandra.mapping.BasicCassandraMappingContext;
@@ -66,6 +69,7 @@ public class StringBasedCassandraQueryUnitTests {
 	SpelExpressionParser PARSER = new SpelExpressionParser();
 
 	@Mock CassandraOperations operations;
+	@Mock CqlOperations cqlOperations;
 	@Mock Session session;
 	@Mock Cluster cluster;
 	@Mock Configuration configuration;
@@ -78,7 +82,9 @@ public class StringBasedCassandraQueryUnitTests {
 	public void setUp() {
 
 		when(operations.getConverter()).thenReturn(converter);
-		when(operations.getSession()).thenReturn(session);
+		when(operations.getCqlOperations()).thenReturn(cqlOperations);
+		when(cqlOperations.execute(any(SessionCallback.class)))
+				.thenAnswer(invocation -> ((SessionCallback) invocation.getArguments()[0]).doInSession(session));
 		when(session.getCluster()).thenReturn(cluster);
 		when(cluster.getConfiguration()).thenReturn(configuration);
 		when(configuration.getCodecRegistry()).thenReturn(CodecRegistry.DEFAULT_INSTANCE);

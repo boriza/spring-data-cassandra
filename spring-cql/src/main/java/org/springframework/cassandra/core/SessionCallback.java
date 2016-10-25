@@ -49,7 +49,7 @@ public interface SessionCallback<T> {
 	 * @throws DriverException if thrown by a Session method, to be auto-converted to a {@link DataAccessException}.
 	 * @throws DataAccessException in case of custom exceptions.
 	 * @see CqlTemplate#queryForObject(String, Class)
-	 * @see CqlTemplateNG#queryForResultSet(String)
+	 * @see CqlTemplate#queryForResultSet(String)
 	 */
 	T doInSession(Session session) throws DriverException, DataAccessException;
 

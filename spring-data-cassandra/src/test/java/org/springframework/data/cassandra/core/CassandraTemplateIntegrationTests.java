@@ -17,35 +17,47 @@ package org.springframework.data.cassandra.core;
 
 import static org.assertj.core.api.Assertions.*;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.springframework.cassandra.core.CqlTemplateNG;
+import org.springframework.cassandra.core.CqlTemplate;
 import org.springframework.cassandra.test.integration.AbstractKeyspaceCreatingIntegrationTest;
 import org.springframework.data.cassandra.convert.MappingCassandraConverter;
 import org.springframework.data.cassandra.domain.Person;
+import org.springframework.data.cassandra.domain.UserToken;
+import org.springframework.data.cassandra.repository.support.BasicMapId;
+import org.springframework.data.cassandra.test.integration.simpletons.BookReference;
 import org.springframework.data.cassandra.test.integration.support.SchemaTestUtils;
 
+import com.datastax.driver.core.utils.UUIDs;
+
 /**
- * Integration tests for {@link CassandraTemplateNG}.
+ * Integration tests for {@link CassandraTemplate}.
  * 
  * @author Mark Paluch
  */
 public class CassandraTemplateIntegrationTests extends AbstractKeyspaceCreatingIntegrationTest {
 
-	private CassandraTemplateNG template;
+	private CassandraTemplate template;
 
 	@Before
 	public void setUp() {
 
 		MappingCassandraConverter converter = new MappingCassandraConverter();
-		template = new CassandraTemplateNG(new CqlTemplateNG(session), converter);
+		converter.afterPropertiesSet();
 
-		// TODO: Cleanup
-		SchemaTestUtils.potentiallyCreateTableFor(Person.class, new CassandraTemplate(session));
-		SchemaTestUtils.truncate(Person.class, new CassandraTemplate(session));
+		template = new CassandraTemplate(new CqlTemplate(session), converter);
+
+		SchemaTestUtils.potentiallyCreateTableFor(Person.class, template);
+		SchemaTestUtils.potentiallyCreateTableFor(UserToken.class, template);
+		SchemaTestUtils.potentiallyCreateTableFor(BookReference.class, template);
+		SchemaTestUtils.truncate(Person.class, template);
+		SchemaTestUtils.truncate(UserToken.class, template);
+		SchemaTestUtils.truncate(BookReference.class, template);
 	}
 
 	/**
@@ -136,5 +148,95 @@ public class CassandraTemplateIntegrationTests extends AbstractKeyspaceCreatingI
 		Stream<Person> stream = template.stream("SELECT * FROM person", Person.class);
 
 		assertThat(stream.collect(Collectors.toList())).hasSize(1).contains(person);
+	}
+
+	/**
+	 * @see <a href="https://jira.spring.io/browse/DATACASS-182">DATACASS-182</a>
+	 */
+	@Test
+	public void updateShouldRemoveFields() {
+
+		Person person = new Person("heisenberg", "Walter", "White");
+
+		template.insert(person);
+
+		person.setFirstname(null);
+		template.update(person);
+
+		Person loaded = template.selectOneById(person.getId(), Person.class);
+
+		assertThat(loaded.getFirstname()).isNull();
+		assertThat(loaded.getId()).isEqualTo("heisenberg");
+	}
+
+	/**
+	 * @see <a href="https://jira.spring.io/browse/DATACASS-182">DATACASS-182</a>
+	 */
+	@Test
+	public void insertShouldRemoveFields() {
+
+		Person person = new Person("heisenberg", "Walter", "White");
+
+		template.insert(person);
+
+		person.setFirstname(null);
+		template.insert(person);
+
+		Person loaded = template.selectOneById(person.getId(), Person.class);
+
+		assertThat(loaded.getFirstname()).isNull();
+		assertThat(loaded.getId()).isEqualTo("heisenberg");
+	}
+
+	/**
+	 * @see <a href="https://jira.spring.io/browse/DATACASS-182">DATACASS-182</a>
+	 */
+	@Test
+	public void insertAndUpdateToEmptyCollection() {
+
+		BookReference bookReference = new BookReference();
+
+		bookReference.setIsbn("isbn");
+		bookReference.setBookmarks(Arrays.asList(1, 2, 3, 4));
+
+		template.insert(bookReference);
+
+		bookReference.setBookmarks(Collections.<Integer> emptyList());
+
+		template.update(bookReference);
+
+		BookReference loaded = template.selectOneById(bookReference.getIsbn(), BookReference.class);
+
+		assertThat(loaded.getTitle()).isNull();
+		assertThat(loaded.getBookmarks()).isNull();
+	}
+
+	/**
+	 * @see <a href="https://jira.spring.io/browse/DATACASS-206">DATACASS-206</a>
+	 */
+	@Test
+	public void shouldUseSpecifiedColumnNamesForSingleEntityModifyingOperations() {
+
+		UserToken userToken = new UserToken();
+		userToken.setToken(UUIDs.startOf(System.currentTimeMillis()));
+		userToken.setUserId(UUIDs.endOf(System.currentTimeMillis()));
+
+		template.insert(userToken);
+
+		userToken.setUserComment("comment");
+		template.update(userToken);
+
+		UserToken loaded = template.selectOneById(
+				BasicMapId.id("userId", userToken.getUserId()).with("token", userToken.getToken()), UserToken.class);
+
+		assertThat(loaded).isNotNull();
+		assertThat(loaded.getUserComment()).isEqualTo("comment");
+
+		template.delete(userToken);
+
+		UserToken loadAfterDelete = template.selectOneById(
+				BasicMapId.id("userId", userToken.getUserId()).with("token", userToken.getToken()), UserToken.class);
+
+		assertThat(loadAfterDelete).isNull();
 	}
 }

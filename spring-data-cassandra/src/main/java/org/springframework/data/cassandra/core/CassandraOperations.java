@@ -1,11 +1,11 @@
 /*
- * Copyright 2013-2016 the original author or authors
+ * Copyright 2016 the original author or authors.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
+ * Licensed under the Apache License, Version 2.0 (the "License")
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,43 +17,30 @@ package org.springframework.data.cassandra.core;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Stream;
 
-import org.springframework.cassandra.core.Cancellable;
 import org.springframework.cassandra.core.CqlOperations;
-import org.springframework.cassandra.core.QueryForObjectListener;
 import org.springframework.cassandra.core.QueryOptions;
 import org.springframework.cassandra.core.WriteOptions;
 import org.springframework.cassandra.core.cql.CqlIdentifier;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.cassandra.convert.CassandraConverter;
 
-import com.datastax.driver.core.querybuilder.Select;
+import com.datastax.driver.core.Statement;
 
 /**
- * Operations for interacting with Cassandra. These operations are used by the Repository implementation, but can also
- * be used directly when that is desired by the developer.
- * <h3>Deprecation note</h3>
- * <p>
- * Methods accepting a {@link List} of entities perform batching operations (insert/update/delete). This can be fine for
- * entities sharing a partition key but leads in most cases to distributed batches across a Cassandra cluster which is
- * an anti-pattern. Please use {@link #batchOps()} if your intention is batching. As of Version 1.5, all methods
- * accepting a {@link List} of entities are deprecated because there is no alternative of inserting multiple rows in an
- * atomic way that guarantees not to harm Cassandra performance. These methods will be removed in Version 2.0. Please
- * issue multiple calls to the corresponding single-entity method.
- * <p>
- * {@link CassandraOperations} mixes synchronous and asynchronous methods so asynchronous methods are subject to be
- * moved into an asynchronous Cassandra template.
- * 
+ * Interface specifying a basic set of Cassandra operations. Implemented by {@link CassandraTemplate}. Not often used
+ * directly, but a useful option to enhance testability, as it can easily be mocked or stubbed.
+ *
  * @author Alex Shvid
  * @author David Webb
  * @author Matthew Adams
  * @author Mark Paluch
+ * @see CassandraTemplate
  * @see CqlOperations
- * @see Select
- * @see WriteListener
- * @see DeletionListener
- * @see QueryForObjectListener
+ * @see Statement
  */
-public interface CassandraOperations extends CqlOperations {
+public interface CassandraOperations {
 
 	/**
 	 * The table name used for the specified class by this template.
@@ -63,552 +50,198 @@ public interface CassandraOperations extends CqlOperations {
 	 */
 	CqlIdentifier getTableName(Class<?> entityClass);
 
-	/**
-	 * Executes the given select {@code query} on the entity table of the specified {@code type} backed by a Cassandra
-	 * {@link com.datastax.driver.core.ResultSet}.
-	 * <p>
-	 * Returns a {@link java.util.Iterator} that wraps the Cassandra {@link com.datastax.driver.core.ResultSet}.
-	 *
-	 * @param <T> element return type.
-	 * @param query query to execute. Must not be empty or {@literal null}.
-	 * @param entityClass Class type of the elements in the {@link Iterator} stream. Must not be {@literal null}.
-	 * @return an {@link Iterator} (stream) over the elements in the query result set.
-	 * @since 1.5
-	 */
-	<T> Iterator<T> stream(String query, Class<T> entityClass);
+	// -------------------------------------------------------------------------
+	// Methods dealing with static CQL
+	// -------------------------------------------------------------------------
 
 	/**
-	 * Execute query and convert ResultSet to the list of entities.
+	 * Execute a {@code SELECT} query and convert the resulting items to a {@link List} of entities.
 	 *
 	 * @param cql must not be {@literal null}.
 	 * @param entityClass The entity type must not be {@literal null}.
 	 * @return the converted results
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> List<T> select(String cql, Class<T> entityClass);
+	<T> List<T> select(String cql, Class<T> entityClass) throws DataAccessException;
 
 	/**
-	 * Execute the Select Query and convert to the list of entities.
+	 * Execute a {@code SELECT} query and convert the resulting items to a {@link Iterator} of entities.
+	 * <p>
+	 * Returns a {@link Iterator} that wraps the Cassandra {@link com.datastax.driver.core.ResultSet}.
 	 *
-	 * @param select must not be {@literal null}.
+	 * @param <T> element return type.
+	 * @param cql query to execute. Must not be empty or {@literal null}.
+	 * @param entityClass Class type of the elements in the {@link Iterator} stream. Must not be {@literal null}.
+	 * @return an {@link Iterator} (stream) over the elements in the query result set.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @since 1.5
+	 */
+	<T> Stream<T> stream(String cql, Class<T> entityClass) throws DataAccessException;
+
+	/**
+	 * Execute a {@code SELECT} query and convert the resulting item to an entity.
+	 *
+	 * @param cql must not be {@literal null}.
+	 * @param entityClass The entity type must not be {@literal null}.
+	 * @return the converted object or {@literal null}.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 */
+	<T> T selectOne(String cql, Class<T> entityClass) throws DataAccessException;
+
+	// -------------------------------------------------------------------------
+	// Methods dealing with com.datastax.driver.core.Statement
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Execute a {@code SELECT} query and convert the resulting items to a {@link List} of entities.
+	 *
+	 * @param statement must not be {@literal null}.
 	 * @param entityClass The entity type must not be {@literal null}.
 	 * @return the converted results
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> List<T> select(Select select, Class<T> entityClass);
+	<T> List<T> select(Statement statement, Class<T> entityClass) throws DataAccessException;
 
 	/**
-	 * Select objects for the given {@code entityClass} and {@code ids}.
+	 * Execute a {@code SELECT} query and convert the resulting items to a {@link Iterator} of entities.
+	 * <p>
+	 * Returns a {@link Iterator} that wraps the Cassandra {@link com.datastax.driver.core.ResultSet}.
 	 *
-	 * @param entityClass The entity type must not be {@literal null}.
-	 * @param ids must not be {@literal null}.
-	 * @return the converted results
+	 * @param <T> element return type.
+	 * @param statement query to execute. Must not be empty or {@literal null}.
+	 * @param entityClass Class type of the elements in the {@link Iterator} stream. Must not be {@literal null}.
+	 * @return an {@link Iterator} (stream) over the elements in the query result set.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @since 1.5
 	 */
-	<T> List<T> selectBySimpleIds(Class<T> entityClass, Iterable<?> ids);
+	<T> Stream<T> stream(Statement statement, Class<T> entityClass) throws DataAccessException;
 
 	/**
-	 * @deprecated Calling this method could result in {@link OutOfMemoryError}, as this is a brute force selection.
+	 * Execute a {@code SELECT} query and convert the resulting item to an entity.
+	 *
+	 * @param statement must not be {@literal null}.
 	 * @param entityClass The entity type must not be {@literal null}.
-	 * @return A list of all entities of type <code>T</code>.
+	 * @return the converted object or {@literal null}.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	@Deprecated
-	<T> List<T> selectAll(Class<T> entityClass);
+	<T> T selectOne(Statement statement, Class<T> entityClass) throws DataAccessException;
+
+	// -------------------------------------------------------------------------
+	// Methods dealing with entities
+	// -------------------------------------------------------------------------
 
 	/**
 	 * Execute the Select by {@code id} for the given {@code entityClass}.
 	 *
-	 * @param entityClass The entity type must not be {@literal null}.
 	 * @param id must not be {@literal null}.
-	 * @return the converted object or {@literal null}.
-	 */
-	<T> T selectOneById(Class<T> entityClass, Object id);
-
-	/**
-	 * Execute CQL and convert ResultSet to the entity
-	 *
-	 * @param cql must not be {@literal null}.
 	 * @param entityClass The entity type must not be {@literal null}.
 	 * @return the converted object or {@literal null}.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> T selectOne(String cql, Class<T> entityClass);
+	<T> T selectOneById(Object id, Class<T> entityClass) throws DataAccessException;
 
 	/**
-	 * Execute Select query and convert ResultSet to the entity
+	 * Select objects for the given {@code entityClass} and {@code ids}.
 	 *
-	 * @param select must not be {@literal null}.
+	 * @param ids must not be {@literal null}.
 	 * @param entityClass The entity type must not be {@literal null}.
-	 * @return the converted object or {@literal null}.
+	 * @return the converted results
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> T selectOne(Select select, Class<T> entityClass);
-
-	/**
-	 * Executes the {@link Select} query asynchronously.
-	 *
-	 * @param select The {@link Select} query to execute.
-	 * @param entityClass The entity type must not be {@literal null}.
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 */
-	<T> Cancellable selectOneAsynchronously(Select select, Class<T> entityClass, QueryForObjectListener<T> listener);
-
-	/**
-	 * Executes the string CQL query asynchronously.
-	 *
-	 * @param cql The string query CQL to execute.
-	 * @param entityClass The entity type must not be {@literal null}.
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 */
-	<T> Cancellable selectOneAsynchronously(String cql, Class<T> entityClass, QueryForObjectListener<T> listener);
-
-	/**
-	 * Executes the {@link Select} query asynchronously.
-	 *
-	 * @param select The {@link Select} query to execute.
-	 * @param entityClass The entity type must not be {@literal null}.
-	 * @param options The {@link QueryOptions} to use.
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 */
-	<T> Cancellable selectOneAsynchronously(Select select, Class<T> entityClass, QueryForObjectListener<T> listener,
-			QueryOptions options);
-
-	/**
-	 * Executes the string CQL query asynchronously.
-	 *
-	 * @param cql The string query CQL to execute.
-	 * @param entityClass The entity type must not be {@literal null}.
-	 * @param options The {@link QueryOptions} to use.
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 */
-	<T> Cancellable selectOneAsynchronously(String cql, Class<T> entityClass, QueryForObjectListener<T> listener,
-			QueryOptions options);
+	<T> List<T> selectBySimpleIds(Iterable<?> ids, Class<T> entityClass) throws DataAccessException;
 
 	/**
 	 * Determine whether the row {@code entityClass} with the given {@code id} exists.
 	 *
-	 * @param entityClass The entity type must not be {@literal null}.
 	 * @param id must not be {@literal null}.
-	 * @return true, if the object exists
-	 */
-	boolean exists(Class<?> entityClass, Object id);
-
-	/**
-	 * Returns the number of rows for the given {@code entityClass} by querying the table of the given entity class.
-	 *
 	 * @param entityClass The entity type must not be {@literal null}.
-	 * @return number of rows
+	 * @return true, if the object exists.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	long count(Class<?> entityClass);
+	boolean exists(Object id, Class<?> entityClass) throws DataAccessException;
 
 	/**
-	 * Insert the given entity.
+	 * Returns the number of rows for the given entity class.
 	 *
-	 * @param entity The entity to insert
-	 * @return The entity given
+	 * @param entityClass must not be {@literal null}.
+	 * @return the number of existing entities.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> T insert(T entity);
+	long count(Class<?> entityClass) throws DataAccessException;
 
 	/**
-	 * Insert the given entity.
+	 * Insert the given entity and return the entity if the insert was applied.
 	 *
-	 * @param entity The entity to insert
-	 * @param options The {@link WriteOptions} to use.
-	 * @return The entity given
+	 * @param entity The entity to insert, must not be {@literal null}.
+	 * @return the inserted entity.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> T insert(T entity, WriteOptions options);
+	<T> T insert(T entity) throws DataAccessException;
 
 	/**
-	 * Insert the given list of entities.
+	 * Insert the given entity applying {@link WriteOptions} and return the entity if the insert was applied.
 	 *
-	 * @param entities The entities to insert.
-	 * @return The entities given.
-	 * @deprecated as of 1.5. This method accepts a {@link List} of entities and inserts all entities in a batch. That's
-	 *             not transparent to users and a Cassandra anti-pattern if used with multiple partition keys. Please use
-	 *             {@link #batchOps()} for if your intent is batching or issue multiple calls to {@link #insert(Object)}
-	 *             as that's the preferred approach. This method will be removed in Version 2.0.
+	 * @param entity The entity to insert, must not be {@literal null}.
+	 * @param options may be {@literal null}.
+	 * @return the inserted entity.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	@Deprecated
-	<T> List<T> insert(List<T> entities);
+	<T> T insert(T entity, WriteOptions options) throws DataAccessException;
 
 	/**
-	 * Insert the given list of entities.
+	 * Update the given entity and return the entity if the update was applied.
 	 *
-	 * @param entities The entities to insert.
-	 * @param options The {@link WriteOptions} to use.
-	 * @return The entities given.
-	 * @deprecated as of 1.5. This method accepts a {@link List} of entities and inserts all entities in a batch. That's
-	 *             not transparent to users and a Cassandra anti-pattern if used with multiple partition keys. Please use
-	 *             {@link #batchOps()} for if your intent is batching or issue multiple calls to
-	 *             {@link #insert(Object, WriteOptions)} as that's the preferred approach. This method will be removed in
-	 *             Version 2.0.
+	 * @param entity The entity to update, must not be {@literal null}.
+	 * @return the updated entity.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	@Deprecated
-	<T> List<T> insert(List<T> entities, WriteOptions options);
+	<T> T update(T entity) throws DataAccessException;
 
 	/**
-	 * Inserts the given entity asynchronously.
+	 * Update the given entity applying {@link WriteOptions} and return the entity if the update was applied.
 	 *
-	 * @param entity The entity to insert
-	 * @return The entity given
-	 * @see #insertAsynchronously(Object, WriteListener)
-	 * @deprecated as of 1.2, this method does not allow for query cancellation or notification of completion. Favor
-	 *             {@link #insertAsynchronously(Object, WriteListener)}.
+	 * @param entity The entity to update, must not be {@literal null}.
+	 * @param options may be {@literal null}.
+	 * @return the updated entity.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	@Deprecated
-	<T> T insertAsynchronously(T entity);
-
-	/**
-	 * Inserts the given entity asynchronously.
-	 *
-	 * @param entity The entity to insert
-	 * @return The entity given
-	 * @see #insertAsynchronously(Object, WriteOptions)
-	 * @deprecated as of 1.2, this method does not allow for query cancellation or notification of completion. Favor
-	 *             {@link #insertAsynchronously(Object, WriteListener, WriteOptions)}.
-	 */
-	@Deprecated
-	<T> T insertAsynchronously(T entity, WriteOptions options);
-
-	/**
-	 * Inserts the given entity asynchronously.
-	 *
-	 * @param entity The entity to insert
-	 * @param listener The listener to receive notification of completion
-	 * @return A {@link Cancellable} enabling the cancellation of the operation
-	 */
-	<T> Cancellable insertAsynchronously(T entity, WriteListener<T> listener);
-
-	/**
-	 * Inserts the given entity asynchronously.
-	 *
-	 * @param entity The entity to insert
-	 * @param listener The listener to receive notification of completion
-	 * @param options The {@link WriteOptions} to use
-	 * @return A {@link Cancellable} enabling the cancellation of the operation
-	 */
-	<T> Cancellable insertAsynchronously(T entity, WriteListener<T> listener, WriteOptions options);
-
-	/**
-	 * Inserts the given entities asynchronously in a batch.
-	 *
-	 * @param entities The entities to insert
-	 * @return The entities given
-	 * @see #insertAsynchronously(List, WriteListener)
-	 * @deprecated as of 1.2, this method does not allow for query cancellation or notification of completion. Favor
-	 *             {@link #insertAsynchronously(List, WriteListener)}.
-	 */
-	@Deprecated
-	<T> List<T> insertAsynchronously(List<T> entities);
-
-	/**
-	 * Inserts the given entities asynchronously in a batch.
-	 *
-	 * @param entities The entities to insert
-	 * @return The entities given
-	 * @see #insertAsynchronously(List, WriteListener, WriteOptions)
-	 * @deprecated as of 1.2, this method does not allow for query cancellation or notification of completion. Favor
-	 *             {@link #insertAsynchronously(List, WriteListener, WriteOptions)}.
-	 */
-	@Deprecated
-	<T> List<T> insertAsynchronously(List<T> entities, WriteOptions options);
-
-	/**
-	 * Inserts the given entities asynchronously in a batch.
-	 *
-	 * @param entities The entities to insert
-	 * @param listener The listener to receive notification of completion
-	 * @return A {@link Cancellable} enabling the cancellation of the operation
-	 * @deprecated as of 1.5. This method accepts a {@link List} of entities and deletes all entities in a batch. That's
-	 *             not transparent to users and a Cassandra anti-pattern if used with multiple partition keys. This method
-	 *             will be removed in Version 2.0.
-	 */
-	@Deprecated
-	<T> Cancellable insertAsynchronously(List<T> entities, WriteListener<T> listener);
-
-	/**
-	 * Inserts the given entities asynchronously in a batch.
-	 *
-	 * @param entities The entities to insert
-	 * @param listener The listener to receive notification of completion
-	 * @param options The {@link WriteOptions} to use
-	 * @return A {@link Cancellable} enabling the cancellation of the operation
-	 * @deprecated as of 1.5. This method accepts a {@link List} of entities and deletes all entities in a batch. That's
-	 *             not transparent to users and a Cassandra anti-pattern if used with multiple partition keys. This method
-	 *             will be removed in Version 2.0.
-	 */
-	@Deprecated
-	<T> Cancellable insertAsynchronously(List<T> entities, WriteListener<T> listener, WriteOptions options);
-
-	/**
-	 * Update the given entity.
-	 *
-	 * @param entity The entity to update
-	 * @return The entity given
-	 */
-	<T> T update(T entity);
-
-	/**
-	 * Update the given entity.
-	 *
-	 * @param entity The entity to update
-	 * @param options The {@link WriteOptions} to use.
-	 * @return The entity given
-	 */
-	<T> T update(T entity, WriteOptions options);
-
-	/**
-	 * Update the given list of entities.
-	 *
-	 * @param entities The entities to update.
-	 * @return The entities given.
-	 * @deprecated as of 1.5. This method accepts a {@link List} of entities and updates all entities in a batch. That's
-	 *             not transparent to users and a Cassandra anti-pattern if used with multiple partition keys. Please use
-	 *             {@link #batchOps()} for if your intent is batching or issue multiple calls to {@link #update(Object)}
-	 *             as that's the preferred approach. This method will be removed in Version 2.0.
-	 */
-	@Deprecated
-	<T> List<T> update(List<T> entities);
-
-	/**
-	 * Update the given list of entities.
-	 *
-	 * @param entities The entities to update.
-	 * @param options The {@link WriteOptions} to use.
-	 * @return The entities given.
-	 * @deprecated as of 1.5. This method accepts a {@link List} of entities and updates all entities in a batch. That's
-	 *             not transparent to users and a Cassandra anti-pattern if used with multiple partition keys. Please use
-	 *             {@link #batchOps()} for if your intent is batching or issue multiple calls to
-	 *             {@link #update(Object, WriteOptions)} as that's the preferred approach. This method will be removed in
-	 *             Version 2.0.
-	 */
-	@Deprecated
-	<T> List<T> update(List<T> entities, WriteOptions options);
-
-	/**
-	 * Updates the given entity asynchronously.
-	 *
-	 * @param entity The entity to update
-	 * @return The entity given
-	 * @see #updateAsynchronously(Object, WriteListener)
-	 * @deprecated as of 1.2, this method does not allow for query cancellation or notification of completion. Favor
-	 *             {@link #updateAsynchronously(Object, WriteListener)}.
-	 */
-	@Deprecated
-	<T> T updateAsynchronously(T entity);
-
-	/**
-	 * Updates the given entity asynchronously.
-	 *
-	 * @param entity The entity to update
-	 * @return The entity given
-	 * @see #updateAsynchronously(Object, WriteOptions)
-	 * @deprecated as of 1.2, this method does not allow for query cancellation or notification of completion. Favor
-	 *             {@link #updateAsynchronously(Object, WriteListener, WriteOptions)}.
-	 */
-	@Deprecated
-	<T> T updateAsynchronously(T entity, WriteOptions options);
-
-	/**
-	 * Updates the given entity asynchronously.
-	 *
-	 * @param entity The entity to update
-	 * @param listener The listener to receive notification of completion
-	 * @return A {@link Cancellable} enabling the cancellation of the operation
-	 */
-	<T> Cancellable updateAsynchronously(T entity, WriteListener<T> listener);
-
-	/**
-	 * Updates the given entity asynchronously.
-	 *
-	 * @param entity The entity to update
-	 * @param listener The listener to receive notification of completion
-	 * @param options The {@link WriteOptions} to use
-	 * @return A {@link Cancellable} enabling the cancellation of the operation
-	 */
-	<T> Cancellable updateAsynchronously(T entity, WriteListener<T> listener, WriteOptions options);
-
-	/**
-	 * Updates the given entities asynchronously in a batch.
-	 *
-	 * @param entities The entities to update
-	 * @return The entities given
-	 * @see #updateAsynchronously(List, WriteListener)
-	 * @deprecated as of 1.2, this method does not allow for query cancellation or notification of completion. Favor
-	 *             {@link #updateAsynchronously(List, WriteListener)}.
-	 */
-	@Deprecated
-	<T> List<T> updateAsynchronously(List<T> entities);
-
-	/**
-	 * Updates the given entities asynchronously in a batch.
-	 *
-	 * @param entities The entities to update
-	 * @return The entities given
-	 * @see #updateAsynchronously(List, WriteListener, WriteOptions)
-	 * @deprecated as of 1.2, this method does not allow for query cancellation or notification of completion. Favor
-	 *             {@link #updateAsynchronously(List, WriteListener, WriteOptions)}.
-	 */
-	@Deprecated
-	<T> List<T> updateAsynchronously(List<T> entities, WriteOptions options);
-
-	/**
-	 * Updates the given entities asynchronously in a batch.
-	 *
-	 * @param entities The entities to update
-	 * @param listener The listener to receive notification of completion
-	 * @return A {@link Cancellable} enabling the cancellation of the operation
-	 * @deprecated as of 1.5. This method accepts a {@link List} of entities and deletes all entities in a batch. That's
-	 *             not transparent to users and a Cassandra anti-pattern if used with multiple partition keys. This method
-	 *             will be removed in Version 2.0.
-	 */
-	@Deprecated
-	<T> Cancellable updateAsynchronously(List<T> entities, WriteListener<T> listener);
-
-	/**
-	 * Updates the given entities asynchronously in a batch.
-	 *
-	 * @param entities The entities to update
-	 * @param listener The listener to receive notification of completion
-	 * @param options The {@link WriteOptions} to use
-	 * @return A {@link Cancellable} enabling the cancellation of the operation
-	 * @deprecated as of 1.5. This method accepts a {@link List} of entities and deletes all entities in a batch. That's
-	 *             not transparent to users and a Cassandra anti-pattern if used with multiple partition keys. This method
-	 *             will be removed in Version 2.0.
-	 */
-	@Deprecated
-	<T> Cancellable updateAsynchronously(List<T> entities, WriteListener<T> listener, WriteOptions options);
+	<T> T update(T entity, WriteOptions options) throws DataAccessException;
 
 	/**
 	 * Remove the given object from the table by id.
 	 *
-	 * @param entityClass The entity type must not be {@literal null}.
 	 * @param id must not be {@literal null}.
+	 * @param entityClass The entity type must not be {@literal null}.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	void deleteById(Class<?> entityClass, Object id);
+	boolean deleteById(Object id, Class<?> entityClass) throws DataAccessException;
 
 	/**
-	 * Remove the given object from the table by id.
+	 * Delete the given entity and return the entity if the delete was applied.
 	 *
 	 * @param entity must not be {@literal null}.
+	 * @return the deleted entity.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> void delete(T entity);
+	<T> T delete(T entity) throws DataAccessException;
 
 	/**
-	 * Remove the given object from the table by id.
+	 * Delete the given entity applying {@link QueryOptions} and return the entity if the delete was applied.
 	 *
 	 * @param entity must not be {@literal null}.
 	 * @param options may be {@literal null}.
+	 * @return the deleted entity.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> void delete(T entity, QueryOptions options);
+	<T> T delete(T entity, QueryOptions options) throws DataAccessException;
 
 	/**
-	 * Remove the given objects from the table by id.
-	 *
-	 * @param entities must not be {@literal null}.
-	 * @deprecated as of 1.5. This method accepts a {@link List} of entities and deletes all entities in a batch. That's
-	 *             not transparent to users and a Cassandra anti-pattern if used with multiple partition keys. Please use
-	 *             {@link #batchOps()} for if your intent is batching or issue multiple calls to {@link #delete(Object)}
-	 *             as that's the preferred approach. This method will be removed in Version 2.0.
-	 */
-	@Deprecated
-	<T> void delete(List<T> entities);
-
-	/**
-	 * Remove the given objects from the table by id.
-	 *
-	 * @param entities must not be {@literal null}.
-	 * @param options may be {@literal null}.
-	 * @deprecated as of 1.5. This method accepts a {@link List} of entities and deletes all entities in a batch. That's
-	 *             not transparent to users and a Cassandra anti-pattern if used with multiple partition keys. Please use
-	 *             {@link #batchOps()} for if your intent is batching or issue multiple calls to
-	 *             {@link #delete(Object, WriteOptions)} as that's the preferred approach. This method will be removed in
-	 *             Version 2.0.
-	 */
-	@Deprecated
-	<T> void delete(List<T> entities, QueryOptions options);
-
-	/**
-	 * Deletes all entities of a given class.
+	 * Execute a {@code TRUNCATE} query to remove all entities of a given class.
 	 * 
 	 * @param entityClass The entity type must not be {@literal null}.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> void deleteAll(Class<T> entityClass);
-
-	/**
-	 * Remove the given object from the table by id.
-	 *
-	 * @param entity The object to delete
-	 */
-	<T> Cancellable deleteAsynchronously(T entity);
-
-	/**
-	 * Remove the given object from the table by id.
-	 *
-	 * @param entity The object to delete
-	 * @param options The {@link QueryOptions} to use
-	 */
-	<T> Cancellable deleteAsynchronously(T entity, QueryOptions options);
-
-	/**
-	 * Remove the given object from the table by id.
-	 *
-	 * @param entity The object to delete
-	 * @param listener The {@link DeletionListener} to receive notification upon completion
-	 */
-	<T> Cancellable deleteAsynchronously(T entity, DeletionListener<T> listener);
-
-	/**
-	 * Remove the given object from the table by id.
-	 *
-	 * @param entity The object to delete
-	 * @param listener The {@link DeletionListener} to receive notification upon completion
-	 * @param options The {@link QueryOptions} to use
-	 */
-	<T> Cancellable deleteAsynchronously(T entity, DeletionListener<T> listener, QueryOptions options);
-
-	/**
-	 * Remove the given objects from the table by id.
-	 *
-	 * @param entities The objects to delete
-	 * @deprecated as of 1.5. This method accepts a {@link List} of entities and deletes all entities in a batch. That's
-	 *             not transparent to users and a Cassandra anti-pattern if used with multiple partition keys. This method
-	 *             will be removed in Version 2.0.
-	 */
-	@Deprecated
-	<T> Cancellable deleteAsynchronously(List<T> entities);
-
-	/**
-	 * Remove the given objects from the table by id.
-	 *
-	 * @param entities The objects to delete
-	 * @param listener The {@link DeletionListener} to receive notification upon completion
-	 * @deprecated as of 1.5. This method accepts a {@link List} of entities and deletes all entities in a batch. That's
-	 *             not transparent to users and a Cassandra anti-pattern if used with multiple partition keys. This method
-	 *             will be removed in Version 2.0.
-	 */
-	@Deprecated
-	<T> Cancellable deleteAsynchronously(List<T> entities, DeletionListener<T> listener);
-
-	/**
-	 * Remove the given objects from the table by id.
-	 *
-	 * @param entities The objects to delete
-	 * @param options The {@link QueryOptions} to use
-	 * @deprecated as of 1.5. This method accepts a {@link List} of entities and deletes all entities in a batch. That's
-	 *             not transparent to users and a Cassandra anti-pattern if used with multiple partition keys. This method
-	 *             will be removed in Version 2.0.
-	 */
-	@Deprecated
-	<T> Cancellable deleteAsynchronously(List<T> entities, QueryOptions options);
-
-	/**
-	 * Remove the given objects from the table by id.
-	 *
-	 * @param entities The objects to delete
-	 * @param listener The {@link DeletionListener} to receive notification upon completion
-	 * @param options The {@link QueryOptions} to use
-	 * @deprecated as of 1.5. This method accepts a {@link List} of entities and deletes all entities in a batch. That's
-	 *             not transparent to users and a Cassandra anti-pattern if used with multiple partition keys. This method
-	 *             will be removed in Version 2.0.
-	 */
-	@Deprecated
-	<T> Cancellable deleteAsynchronously(List<T> entities, DeletionListener<T> listener, QueryOptions options);
+	void truncate(Class<?> entityClass) throws DataAccessException;
 
 	/**
 	 * Returns a new {@link CassandraBatchOperations}. Each {@link CassandraBatchOperations} instance can be executed only
@@ -625,4 +258,11 @@ public interface CassandraOperations extends CqlOperations {
 	 */
 	CassandraConverter getConverter();
 
+	/**
+	 * Expose the underlying {@link CqlOperations} to allow CQL operations.
+	 * 
+	 * @return the underlying {@link CqlOperations}.
+	 * @see CqlOperations
+	 */
+	CqlOperations getCqlOperations();
 }

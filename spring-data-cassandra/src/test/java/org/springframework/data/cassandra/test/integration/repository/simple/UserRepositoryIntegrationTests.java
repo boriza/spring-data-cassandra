@@ -80,7 +80,8 @@ public class UserRepositoryIntegrationTests {
 		scott.setPassword("444");
 		scott.setPlace("Boston");
 
-		all = template.insert(Arrays.asList(tom, bob, alice, scott));
+		all = Arrays.asList(tom, bob, alice, scott);
+		template.batchOps().insert(all).execute();
 	}
 
 	public void before() {

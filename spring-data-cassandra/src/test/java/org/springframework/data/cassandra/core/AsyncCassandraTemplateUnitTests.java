@@ -71,7 +71,7 @@ public class AsyncCassandraTemplateUnitTests {
 	@Before
 	public void setUp() {
 
-		template = new AsyncCassandraTemplate(session, new MappingCassandraConverter());
+		template = new AsyncCassandraTemplate(session);
 		when(session.executeAsync(anyString())).thenReturn(new TestResultSetFuture(resultSet));
 		when(session.executeAsync(any(Statement.class))).thenReturn(new TestResultSetFuture(resultSet));
 		when(resultSet.getColumnDefinitions()).thenReturn(columnDefinitions);

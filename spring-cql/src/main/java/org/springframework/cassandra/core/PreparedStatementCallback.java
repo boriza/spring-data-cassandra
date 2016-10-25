@@ -44,15 +44,15 @@ public interface PreparedStatementCallback<T> {
 	 * <p>
 	 * Allows for returning a result object created within the callback, i.e. a domain object or a collection of domain
 	 * objects. Note that there's special support for single step actions: see
-	 * {@link CqlTemplateNG#queryForObject(String, Class, Object...)} etc. A thrown RuntimeException is treated as
+	 * {@link CqlTemplate#queryForObject(String, Class, Object...)} etc. A thrown RuntimeException is treated as
 	 * application exception, it gets propagated to the caller of the template.
 	 * 
 	 * @param ps the {@link PreparedStatement}, must not be {@literal null}.
 	 * @return a result object publisher.
 	 * @throws DriverException if thrown by a session method, to be auto-converted to a DataAccessException.
 	 * @throws DataAccessException in case of custom exceptions.
-	 * @see CqlTemplateNG#queryForObject(String, Class, Object...)
-	 * @see CqlTemplateNG#queryForList(String, Object...)
+	 * @see CqlTemplate#queryForObject(String, Class, Object...)
+	 * @see CqlTemplate#queryForList(String, Object...)
 	 */
 	T doInPreparedStatement(PreparedStatement ps) throws DriverException, DataAccessException;
 

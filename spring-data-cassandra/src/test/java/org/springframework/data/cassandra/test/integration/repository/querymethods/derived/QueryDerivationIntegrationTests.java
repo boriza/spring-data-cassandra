@@ -22,6 +22,7 @@ import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 
+import com.datastax.driver.core.Session;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -68,9 +69,9 @@ public class QueryDerivationIntegrationTests extends AbstractSpringDataEmbeddedC
 
 	}
 
-	@Autowired private CassandraOperations template;
-
-	@Autowired private PersonRepository personRepository;
+	@Autowired CassandraOperations template;
+	@Autowired Session session;
+	@Autowired PersonRepository personRepository;
 
 	private Person walter;
 	private Person skyler;
@@ -151,7 +152,8 @@ public class QueryDerivationIntegrationTests extends AbstractSpringDataEmbeddedC
 
 		assumeTrue(Version.parse(SpringVersion.getVersion()).isGreaterThanOrEqualTo(Version.parse("4.3")));
 
-		template.execute("CREATE INDEX IF NOT EXISTS person_number_of_children ON person (numberofchildren);");
+		template.getCqlOperations()
+				.execute("CREATE INDEX IF NOT EXISTS person_number_of_children ON person (numberofchildren);");
 
 		// Give Cassandra some time to build the index
 		Thread.sleep(500);
@@ -167,7 +169,7 @@ public class QueryDerivationIntegrationTests extends AbstractSpringDataEmbeddedC
 	@Test
 	public void shouldFindByLocalDate() throws InterruptedException {
 
-		template.execute("CREATE INDEX IF NOT EXISTS person_created_date ON person (createddate);");
+		template.getCqlOperations().execute("CREATE INDEX IF NOT EXISTS person_created_date ON person (createddate);");
 
 		// Give Cassandra some time to build the index
 		Thread.sleep(500);
@@ -201,9 +203,9 @@ public class QueryDerivationIntegrationTests extends AbstractSpringDataEmbeddedC
 	@Test
 	public void shouldUseStartsWithQuery() throws InterruptedException {
 
-		assumeTrue(CassandraVersion.get(template.getSession()).isGreaterThanOrEqualTo(Version.parse("3.4")));
+		assumeTrue(CassandraVersion.get(session).isGreaterThanOrEqualTo(Version.parse("3.4")));
 
-		template.execute(
+		template.getCqlOperations().execute(
 				"CREATE CUSTOM INDEX IF NOT EXISTS fn_starts_with ON person (nickname) USING 'org.apache.cassandra.index.sasi.SASIIndex';");
 
 		// Give Cassandra some time to build the index
@@ -221,9 +223,9 @@ public class QueryDerivationIntegrationTests extends AbstractSpringDataEmbeddedC
 	@Test
 	public void shouldUseContainsQuery() throws InterruptedException {
 
-		assumeTrue(CassandraVersion.get(template.getSession()).isGreaterThanOrEqualTo(Version.parse("3.4")));
+		assumeTrue(CassandraVersion.get(session).isGreaterThanOrEqualTo(Version.parse("3.4")));
 
-		template.execute(
+		template.getCqlOperations().execute(
 				"CREATE CUSTOM INDEX IF NOT EXISTS fn_contains ON person (nickname) USING 'org.apache.cassandra.index.sasi.SASIIndex'\n"
 						+ "WITH OPTIONS = { 'mode': 'CONTAINS' };");
 

@@ -263,7 +263,7 @@ public class ReactiveCassandraTemplate implements ReactiveCassandraOperations {
 
 		CqlIdentifier tableName = getTableName(entity);
 
-		Insert insert = createInsertQuery(tableName.toCql(), entity, options, converter);
+		Insert insert = QueryUtils.createInsertQuery(tableName.toCql(), entity, options, converter);
 
 		class InsertCallback implements ReactiveSessionCallback<T>, CqlProvider {
 
@@ -322,7 +322,7 @@ public class ReactiveCassandraTemplate implements ReactiveCassandraOperations {
 
 		CqlIdentifier tableName = getTableName(entity);
 
-		Update update = createUpdateQuery(tableName.toCql(), entity, options, converter);
+		Update update = QueryUtils.createUpdateQuery(tableName.toCql(), entity, options, converter);
 
 		class UpdateCallback implements ReactiveSessionCallback<T>, CqlProvider {
 
@@ -399,7 +399,7 @@ public class ReactiveCassandraTemplate implements ReactiveCassandraOperations {
 
 		CqlIdentifier tableName = getTableName(entity);
 
-		Delete delete = createDeleteQuery(tableName.toCql(), entity, options, converter);
+		Delete delete = QueryUtils.createDeleteQuery(tableName.toCql(), entity, options, converter);
 
 		class DeleteCallback implements ReactiveSessionCallback<T>, CqlProvider {
 

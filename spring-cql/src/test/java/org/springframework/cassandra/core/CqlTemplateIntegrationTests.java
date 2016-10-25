@@ -29,14 +29,14 @@ import org.springframework.cassandra.test.integration.AbstractKeyspaceCreatingIn
 import com.datastax.driver.core.querybuilder.QueryBuilder;
 
 /**
- * Integration tests for {@link CqlTemplateNG}.
+ * Integration tests for {@link CqlTemplate}.
  * 
  * @author Mark Paluch
  */
-public class CqlTemplateNGIntegrationTests extends AbstractKeyspaceCreatingIntegrationTest {
+public class CqlTemplateIntegrationTests extends AbstractKeyspaceCreatingIntegrationTest {
 
-	private static final AtomicBoolean initialized = new AtomicBoolean();
-	private CqlTemplateNG template;
+	static final AtomicBoolean initialized = new AtomicBoolean();
+	CqlTemplate template;
 
 	@Before
 	public void before() throws Exception {
@@ -49,7 +49,7 @@ public class CqlTemplateNGIntegrationTests extends AbstractKeyspaceCreatingInteg
 
 		session.execute("INSERT INTO user (id, username) VALUES ('WHITE', 'Walter');");
 
-		template = new CqlTemplateNG();
+		template = new CqlTemplate();
 		template.setSession(getSession());
 	}
 

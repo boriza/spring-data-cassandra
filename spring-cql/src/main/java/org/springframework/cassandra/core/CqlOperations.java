@@ -1,12 +1,12 @@
 /*
- * Copyright 2013-2016 the original author or authors.
- * 
+ * Copyright 2016 the original author or authors.
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,1239 +16,759 @@
 package org.springframework.cassandra.core;
 
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
 
-import org.springframework.cassandra.core.cql.CqlIdentifier;
-import org.springframework.cassandra.core.keyspace.AlterKeyspaceSpecification;
-import org.springframework.cassandra.core.keyspace.AlterTableSpecification;
-import org.springframework.cassandra.core.keyspace.CreateIndexSpecification;
-import org.springframework.cassandra.core.keyspace.CreateKeyspaceSpecification;
-import org.springframework.cassandra.core.keyspace.CreateTableSpecification;
-import org.springframework.cassandra.core.keyspace.DropIndexSpecification;
-import org.springframework.cassandra.core.keyspace.DropKeyspaceSpecification;
-import org.springframework.cassandra.core.keyspace.DropTableSpecification;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.IncorrectResultSizeDataAccessException;
 
 import com.datastax.driver.core.PreparedStatement;
 import com.datastax.driver.core.ResultSet;
-import com.datastax.driver.core.ResultSetFuture;
-import com.datastax.driver.core.Session;
+import com.datastax.driver.core.Row;
 import com.datastax.driver.core.Statement;
-import com.datastax.driver.core.querybuilder.Batch;
-import com.datastax.driver.core.querybuilder.Delete;
-import com.datastax.driver.core.querybuilder.Insert;
-import com.datastax.driver.core.querybuilder.Select;
-import com.datastax.driver.core.querybuilder.Truncate;
-import com.datastax.driver.core.querybuilder.Update;
 
 /**
- * Operations for interacting with Cassandra at the lowest level. This interface provides Exception Translation.
- * 
- * @author David Webb
- * @author Matthew Adams
- * @author John Blum
+ * Interface specifying a basic set of CQL operations. Implemented by {@link CqlTemplate}. Not often used directly, but
+ * a useful option to enhance testability, as it can easily be mocked or stubbed.
+ *
+ * @author Mark Paluch
+ * @since 2.0
+ * @see CqlTemplate
  */
 public interface CqlOperations {
 
+	// -------------------------------------------------------------------------
+	// Methods dealing with a plain com.datastax.driver.core.Session
+	// -------------------------------------------------------------------------
+
 	/**
-	 * Convenient method that delegates to {@link ResultSetFuture#getUninterruptibly()} but translates exceptions if any
-	 * are thrown.
+	 * Execute a CQL data access operation, implemented as callback action working on a
+	 * {@link com.datastax.driver.core.Session}. This allows for implementing arbitrary data access operations, within
+	 * Spring's managed CQL environment: that is, converting CQL
+	 * {@link com.datastax.driver.core.exceptions.DriverException}s into Spring's {@link DataAccessException} hierarchy.
+	 * <p>
+	 * The callback action can return a result object, for example a domain object or a collection of domain objects.
 	 * 
-	 * @param rsf The {@link ResultSetFuture} from which to get the {@link ResultSet}.
-	 * @return The {@link ResultSet}
+	 * @param action the callback object that specifies the action.
+	 * @return a result object returned by the action, or {@literal null}.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	ResultSet getResultSetUninterruptibly(ResultSetFuture rsf);
+	<T> T execute(SessionCallback<T> action) throws DataAccessException;
+
+	// -------------------------------------------------------------------------
+	// Methods dealing with static CQL
+	// -------------------------------------------------------------------------
 
 	/**
-	 * Convenient method that delegates to {@link ResultSetFuture#getUninterruptibly()} but translates exceptions if any
-	 * are thrown.
+	 * Issue a single CQL execute, typically a DDL statement, insert, update or delete statement.
 	 * 
-	 * @param rsf The {@link ResultSetFuture} from which to get the {@link ResultSet}.
-	 * @param timeout The timeout to wait in milliseconds. A nonpositive value means wait indefinitely.
-	 * @return The {@link ResultSet}
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @return boolean value whether the statement was applied.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	ResultSet getResultSetUninterruptibly(ResultSetFuture rsf, long millis);
+	boolean execute(String cql) throws DataAccessException;
 
 	/**
-	 * Convenient method that delegates to {@link ResultSetFuture#getUninterruptibly()} but translates exceptions if any
-	 * are thrown.
+	 * Execute a query given static CQL, reading the {@link ResultSet} with a {@link ResultSetExtractor}.
+	 * <p>
+	 * Uses a CQL Statement, not a {@link PreparedStatement}. If you want to execute a static query with a
+	 * {@link PreparedStatement}, use the overloaded {@code query} method with {@literal null} as argument array.
 	 * 
-	 * @param rsf The {@link ResultSetFuture} from which to get the {@link ResultSet}.
-	 * @param timeout The timeout to wait. A nonpositive value means wait indefinitely.
-	 * @param unit The {@link TimeUnit} of the timeout.
-	 * @return The {@link ResultSet}
-	 */
-	ResultSet getResultSetUninterruptibly(ResultSetFuture rsf, long timeout, TimeUnit unit);
-
-	/**
-	 * Executes the supplied {@link SessionCallback} in the current Template Session. The implementation of
-	 * SessionCallback can decide whether or not to <code>execute()</code> or <code>executeAsync()</code> the operation.
-	 * 
-	 * @param sessionCallback
-	 * @return Type<T> defined in the SessionCallback
-	 */
-	<T> T execute(SessionCallback<T> sessionCallback) throws DataAccessException;
-
-	/**
-	 * Executes the supplied CQL Query and returns nothing.
-	 * 
-	 * @param cql
-	 */
-	void execute(String cql) throws DataAccessException;
-
-	/**
-	 * Executes the supplied CQL Query and returns nothing.
-	 * 
-	 * @param cql
-	 * @param options may be null
-	 */
-	void execute(String cql, QueryOptions options) throws DataAccessException;
-
-	/**
-	 * Executes the supplied Query and returns nothing.
-	 * 
-	 * @param query The {@link Statement} to execute
-	 */
-	void execute(Statement query) throws DataAccessException;
-
-	/**
-	 * Executes the supplied Delete Query and returns nothing.
-	 * 
-	 * @param query The {@link Delete} to execute
-	 */
-	void execute(Delete delete) throws DataAccessException;
-
-	/**
-	 * Executes the supplied Insert Query and returns nothing.
-	 * 
-	 * @param query The {@link Insert} to execute
-	 */
-	void execute(Insert insert) throws DataAccessException;
-
-	/**
-	 * Executes the supplied Update Query and returns nothing.
-	 * 
-	 * @param query The {@link Update} to execute
-	 */
-	void execute(Update update) throws DataAccessException;
-
-	/**
-	 * Executes the supplied Batch Query and returns nothing.
-	 * 
-	 * @param query The {@link Batch} to execute
-	 */
-	void execute(Batch batch) throws DataAccessException;
-
-	/**
-	 * Executes the supplied Truncate Query and returns nothing.
-	 * 
-	 * @param query The {@link Truncate} to execute
-	 */
-	void execute(Truncate truncate) throws DataAccessException;
-
-	/**
-	 * Executes the supplied Query Asynchronously and returns nothing.
-	 * 
-	 * @param cql The CQL String to execute
-	 * @return A {@link ResultSetFuture} that can be used to cancel the query.
-	 */
-	ResultSetFuture executeAsynchronously(String cql) throws DataAccessException;
-
-	/**
-	 * Executes the supplied Query Asynchronously and returns nothing.
-	 * 
-	 * @param cql The CQL String to execute
-	 * @param options The {@link QueryOptions} to use. Only applies to cql statements that can use QueryOptions.
-	 * @return A {@link ResultSetFuture} that can be used to cancel the query.
-	 */
-	ResultSetFuture executeAsynchronously(String cql, QueryOptions options) throws DataAccessException;
-
-	/**
-	 * Executes the supplied Query Asynchronously and returns nothing.
-	 * 
-	 * @param cql The CQL String to execute
-	 * @param listener The {@link Runnable} to register with the {@link ResultSetFuture}
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 * @see queryAsyncronously for Reads
-	 */
-	Cancellable executeAsynchronously(String cql, Runnable listener) throws DataAccessException;
-
-	/**
-	 * Executes the supplied Query Asynchronously and returns nothing.
-	 * 
-	 * @param cql The CQL String to execute
-	 * @param listener The {@link Runnable} to register with the {@link ResultSetFuture}
-	 * @param executor The {@link Executor} to regsiter with the {@link ResultSetFuture}
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 * @see queryAsyncronously for Reads
-	 */
-	Cancellable executeAsynchronously(String cql, Runnable listener, Executor executor) throws DataAccessException;
-
-	/**
-	 * Executes the supplied Query Asynchronously and returns nothing.
-	 * 
-	 * @param cql The CQL String to execute
-	 * @param listener The {@link AsynchronousQueryListener} to register with the {@link ResultSetFuture}
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 * @see queryAsyncronously for Reads
-	 */
-	Cancellable executeAsynchronously(String cql, AsynchronousQueryListener listener) throws DataAccessException;
-
-	/**
-	 * Executes the supplied Query Asynchronously and returns nothing.
-	 * 
-	 * @param cql The CQL String to execute
-	 * @param listener The {@link AsynchronousQueryListener} to register with the {@link ResultSetFuture}
-	 * @param executor The {@link Executor} to regsiter with the {@link ResultSetFuture}
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 * @see queryAsyncronously for Reads
-	 */
-	Cancellable executeAsynchronously(String cql, AsynchronousQueryListener listener, Executor executor)
-			throws DataAccessException;
-
-	/**
-	 * Executes the supplied CQL Truncate Asynchronously and returns nothing.
-	 * 
-	 * @param query The {@link Truncate} to execute
-	 * @return A {@link ResultSetFuture} that can be used to cancel the query.
-	 */
-	ResultSetFuture executeAsynchronously(Truncate truncate) throws DataAccessException;
-
-	/**
-	 * Executes the supplied CQL Delete Asynchronously and returns nothing.
-	 * 
-	 * @param query The {@link Delete} to execute
-	 * @return A {@link ResultSetFuture} that can be used to cancel the query.
-	 */
-	ResultSetFuture executeAsynchronously(Delete delete) throws DataAccessException;
-
-	/**
-	 * Executes the supplied CQL Insert Asynchronously and returns nothing.
-	 * 
-	 * @param query The {@link Insert} to execute
-	 * @return A {@link ResultSetFuture} that can be used to cancel the query.
-	 */
-	ResultSetFuture executeAsynchronously(Insert insert) throws DataAccessException;
-
-	/**
-	 * Executes the supplied CQL Update Asynchronously and returns nothing.
-	 * 
-	 * @param query The {@link Update} to execute
-	 * @return A {@link ResultSetFuture} that can be used to cancel the query.
-	 */
-	ResultSetFuture executeAsynchronously(Update update) throws DataAccessException;
-
-	/**
-	 * Executes the supplied CQL Batch Asynchronously and returns nothing.
-	 * 
-	 * @param query The {@link Batch} to execute
-	 * @return A {@link ResultSetFuture} that can be used to cancel the query.
-	 */
-	ResultSetFuture executeAsynchronously(Batch batch) throws DataAccessException;
-
-	Cancellable executeAsynchronously(Truncate truncate, AsynchronousQueryListener listener) throws DataAccessException;
-
-	Cancellable executeAsynchronously(Delete delete, AsynchronousQueryListener listener) throws DataAccessException;
-
-	Cancellable executeAsynchronously(Insert insert, AsynchronousQueryListener listener) throws DataAccessException;
-
-	Cancellable executeAsynchronously(Update update, AsynchronousQueryListener listener) throws DataAccessException;
-
-	Cancellable executeAsynchronously(Batch batch, AsynchronousQueryListener listener) throws DataAccessException;
-
-	/**
-	 * Executes the supplied CQL Query Asynchronously and returns nothing.
-	 * 
-	 * @param query The {@link Statement} to execute
-	 * @return A {@link ResultSetFuture} that can be used to cancel the query.
-	 */
-	ResultSetFuture executeAsynchronously(Statement query) throws DataAccessException;
-
-	/**
-	 * Executes the supplied CQL Query Asynchronously and returns nothing.
-	 * 
-	 * @param query The {@link Statement} to execute
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 */
-	Cancellable executeAsynchronously(Statement query, Runnable runnable) throws DataAccessException;
-
-	/**
-	 * Executes the supplied CQL Query Asynchronously and returns nothing.
-	 * 
-	 * @param query The {@link Statement} to execute
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 */
-	Cancellable executeAsynchronously(Statement query, AsynchronousQueryListener listener) throws DataAccessException;
-
-	/**
-	 * Executes the supplied CQL Query Asynchronously and returns nothing.
-	 * 
-	 * @param query The {@link Statement} to execute
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 */
-	Cancellable executeAsynchronously(Statement query, Runnable runnable, Executor executor) throws DataAccessException;
-
-	/**
-	 * Executes the supplied CQL Query Asynchronously and returns nothing.
-	 * 
-	 * @param query The {@link Statement} to execute
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 */
-	Cancellable executeAsynchronously(Statement query, AsynchronousQueryListener listener, Executor executor)
-			throws DataAccessException;
-
-	/**
-	 * Executes the provided CQL Query, and extracts the results with the ResultSetExtractor. This uses default Query
-	 * Options when extracting the ResultSet.
-	 * 
-	 * @param cql The Query
-	 * @param rse The implementation for extracting the ResultSet
-	 * @param timeout Time to wait for results
-	 * @param timeUnit Time unit to wait for results
-	 * @return
-	 */
-	<T> T queryAsynchronously(String cql, ResultSetExtractor<T> rse, Long timeout, TimeUnit timeUnit);
-
-	/**
-	 * Executes the provided CQL Query, and extracts the results with the ResultSetExtractor.
-	 * 
-	 * @param cql The Query
-	 * @param rse The implementation for extracting the ResultSet
-	 * @param timeout Time to wait for results
-	 * @param timeUnit Time unit to wait for results
-	 * @param options Query Options
-	 * @return
-	 */
-	<T> T queryAsynchronously(String cql, ResultSetExtractor<T> rse, Long timeout, TimeUnit timeUnit,
-			QueryOptions options);
-
-	/**
-	 * Executes the provided CQL Query and returns the ResultSetFuture for user processing.
-	 * 
-	 * @param cql The Query
-	 * @return
-	 */
-	ResultSetFuture queryAsynchronously(String cql);
-
-	/**
-	 * Executes the provided CQL Select and returns the ResultSetFuture for user processing.
-	 * 
-	 * @param cql The {@link Select}
-	 * @return
-	 */
-	ResultSetFuture queryAsynchronously(Select select);
-
-	/**
-	 * Executes the provided CQL Query and returns the ResultSetFuture for user processing.
-	 * 
-	 * @param cql The Query
-	 * @param options Query Options
-	 * @return
-	 */
-	ResultSetFuture queryAsynchronously(String cql, QueryOptions options);
-
-	/**
-	 * Executes the provided CQL Query with the provided {@link Runnable}, which is started after the query has completed.
-	 * <p/>
-	 * A more useful method than this one is {@link #queryAsynchronously(String, AsynchronousQueryListener)}, where you're
-	 * given the {@link ResultSetFuture} after the query has been executed.
-	 * 
-	 * @param cql The Query
-	 * @param listener {@link Runnable} listener for handling the query in a separate thread
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 * @see #queryAsynchronously(String, AsynchronousQueryListener)
-	 */
-	Cancellable queryAsynchronously(String cql, Runnable listener);
-
-	/**
-	 * Executes the provided CQL Select with the provided {@link Runnable}, which is started after the query has
-	 * completed.
-	 * <p/>
-	 * A more useful method than this one is {@link #queryAsynchronously(Select, AsynchronousQueryListener)}, where you're
-	 * given the {@link ResultSetFuture} after the query has been executed.
-	 * 
-	 * @param select The Select Query
-	 * @param listener {@link Runnable} listener for handling the query in a separate thread
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 * @see #queryAsynchronously(Select, AsynchronousQueryListener)
-	 */
-	Cancellable queryAsynchronously(Select select, Runnable listener);
-
-	/**
-	 * Executes the provided CQL Query with the provided listener. This is preferred over the same method that takes a
-	 * {@link Runnable}. The {@link AsynchronousQueryListener} gives you access to the {@link ResultSetFuture} once the
-	 * query is completed for optimal flexibility.
-	 * 
-	 * @param cql The Query
-	 * @param listener {@link AsynchronousQueryListener} for handling the query's {@link ResultSetFuture} in a separate
-	 *          thread
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 */
-	Cancellable queryAsynchronously(String cql, AsynchronousQueryListener listener);
-
-	/**
-	 * Executes the provided CQL Select with the provided listener. This is preferred over the same method that takes a
-	 * {@link Runnable}. The {@link AsynchronousQueryListener} gives you access to the {@link ResultSetFuture} once the
-	 * query is completed for optimal flexibility.
-	 * 
-	 * @param select The Select
-	 * @param listener {@link AsynchronousQueryListener} for handling the query's {@link ResultSetFuture} in a separate
-	 *          thread
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 */
-	Cancellable queryAsynchronously(Select select, AsynchronousQueryListener listener);
-
-	/**
-	 * Executes the provided CQL Query with the Runnable implementations using the Query Options.
-	 * 
-	 * @param cql The Query
-	 * @param options Query Option
-	 * @param listener Runnable Listener for handling the query in a separate thread
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 */
-	Cancellable queryAsynchronously(String cql, Runnable listener, QueryOptions options);
-
-	/**
-	 * Executes the provided CQL Query with the provided Listener and Query Options. This is preferred over the same
-	 * method that takes a plain Runnable. The {@link AsynchronousQueryListener} gives you access to the
-	 * {@link ResultSetFuture} once the query is completed for optimal flexibility.
-	 * 
-	 * @param cql The Query
-	 * @param options Query Option
-	 * @param listener Runnable Listener for handling the query in a separate thread
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 */
-	Cancellable queryAsynchronously(String cql, AsynchronousQueryListener listener, QueryOptions options);
-
-	/**
-	 * Executes the provided CQL Query with the provided Executor and Runnable implementations.
-	 * 
-	 * @param cql The Query
-	 * @param listener Runnable Listener for handling the query in a separate thread
-	 * @param executor To execute the Runnable Listener
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 */
-	Cancellable queryAsynchronously(String cql, Runnable listener, Executor executor);
-
-	/**
-	 * Executes the provided CQL Select with the provided Executor and Runnable implementations.
-	 * 
-	 * @param select The Select Query
-	 * @param listener Runnable Listener for handling the query in a separate thread
-	 * @param executor To execute the Runnable Listener
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 */
-	Cancellable queryAsynchronously(Select select, Runnable listener, Executor executor);
-
-	/**
-	 * Executes the provided CQL Query with the provided listener and executor. This is preferred over the same method
-	 * that takes a plain Runnable. The {@link AsynchronousQueryListener} gives you access to the {@link ResultSetFuture}
-	 * once the query is completed for optimal flexibility.
-	 * 
-	 * @param cql The Query
-	 * @param options Query Option
-	 * @param listener Runnable Listener for handling the query in a separate thread
-	 * @param executor To execute the Runnable Listener
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 */
-	Cancellable queryAsynchronously(String cql, AsynchronousQueryListener listener, Executor executor);
-
-	/**
-	 * Executes the provided Select Query with the provided listener and executor. This is preferred over the same method
-	 * that takes a plain Runnable. The {@link AsynchronousQueryListener} gives you access to the {@link ResultSetFuture}
-	 * once the query is completed for optimal flexibility.
-	 * 
-	 * @param select The Select Query
-	 * @param listener Runnable Listener for handling the query in a separate thread
-	 * @param executor To execute the Runnable Listener
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 */
-	Cancellable queryAsynchronously(Select select, AsynchronousQueryListener listener, Executor executor);
-
-	/**
-	 * Executes the provided CQL Query with the provided Executor and Runnable implementations.
-	 * 
-	 * @param cql The Query
-	 * @param options Query Option
-	 * @param listener Runnable Listener for handling the query in a separate thread
-	 * @param executor To execute the Runnable Listener
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 */
-	Cancellable queryAsynchronously(String cql, Runnable listener, QueryOptions options, Executor executor);
-
-	/**
-	 * Executes the provided CQL Query with the provided Listener, Executor and Query Options. This is preferred over the
-	 * same method that takes a plain Runnable. The {@link AsynchronousQueryListener} gives you access to the
-	 * {@link ResultSetFuture} once the query is completed for optimal flexibility.
-	 * 
-	 * @param cql
-	 * @param listener
-	 * @param options
-	 * @param executor
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 */
-	Cancellable queryAsynchronously(String cql, AsynchronousQueryListener listener, QueryOptions options,
-			Executor executor);
-
-	/**
-	 * Executes the provided CQL query and returns the {@link ResultSet}.
-	 * 
-	 * @param cql The query
-	 * @return The {@link ResultSet}
-	 */
-	ResultSet query(String cql);
-
-	/**
-	 * Executes the provided Select query and returns the {@link ResultSet}.
-	 * 
-	 * @param select The Select Query
-	 * @return The {@link ResultSet}
-	 */
-	ResultSet query(Select select);
-
-	/**
-	 * Executes the provided CQL query with the given {@link QueryOptions} and returns the {@link ResultSet}.
-	 * 
-	 * @param cql The query
-	 * @param options The {@link QueryOptions}; may be null.
-	 * @return The {@link ResultSet}
-	 */
-	ResultSet query(String cql, QueryOptions options);
-
-	/**
-	 * Executes the provided CQL Query, and extracts the results with the ResultSetExtractor.
-	 * 
-	 * @param cql The Query
-	 * @param rse The implementation for extracting the ResultSet
-	 * @return Type <T> specified in the ResultSetExtractor
-	 * @throws DataAccessException
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @param rse object that will extract all rows of results, must not be {@literal null}.
+	 * @return an arbitrary result object, as returned by the ResultSetExtractor.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @see #query(String, ResultSetExtractor, Object...)
 	 */
 	<T> T query(String cql, ResultSetExtractor<T> rse) throws DataAccessException;
 
 	/**
-	 * Executes the provided Select Query, and extracts the results with the ResultSetExtractor.
+	 * Execute a query given static CQL, reading the {@link ResultSet} on a per-row basis with a
+	 * {@link RowCallbackHandler}.
+	 * <p>
+	 * Uses a CQL Statement, not a {@link PreparedStatement}. If you want to execute a static query with a
+	 * {@link PreparedStatement}, use the overloaded {@code query} method with {@code null} as argument array.
 	 * 
-	 * @param select The SelectQuery
-	 * @param rse The implementation for extracting the ResultSet
-	 * @return Type <T> specified in the ResultSetExtractor
-	 * @throws DataAccessException
-	 */
-	<T> T query(Select select, ResultSetExtractor<T> rse) throws DataAccessException;
-
-	/**
-	 * Executes the provided CQL Query, and extracts the results with the ResultSetExtractor.
-	 * 
-	 * @param cql The Query
-	 * @param rse The implementation for extracting the ResultSet
-	 * @param options Query Options
-	 * @return
-	 * @throws DataAccessException
-	 */
-	<T> T query(String cql, ResultSetExtractor<T> rse, QueryOptions options) throws DataAccessException;
-
-	/**
-	 * Executes the provided CQL Query, and then processes the results with the <code>RowCallbackHandler</code>.
-	 * 
-	 * @param cql The Query
-	 * @param rch The implementation for processing the rows returned.
-	 * @throws DataAccessException
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @param rch object that will extract results, one row at a time, must not be {@literal null}.
+	 * @throws DataAccessException if there is any problem executing the query
+	 * @see #query(String, RowCallbackHandler, Object[])
 	 */
 	void query(String cql, RowCallbackHandler rch) throws DataAccessException;
 
 	/**
-	 * Executes the provided Select Query, and then processes the results with the <code>RowCallbackHandler</code>.
+	 * Execute a query given static CQL, mapping each row to a Java object via a {@link RowMapper}.
+	 * <p>
+	 * Uses a CQL Statement, not a {@link PreparedStatement}. If you want to execute a static query with a
+	 * {@link PreparedStatement}, use the overloaded {@code query} method with {@literal null} as argument array.
 	 * 
-	 * @param select The Select Query
-	 * @param rch The implementation for processing the rows returned.
-	 * @throws DataAccessException
-	 */
-	void query(Select select, RowCallbackHandler rch) throws DataAccessException;
-
-	/**
-	 * Executes the provided CQL Query, and then processes the results with the <code>RowCallbackHandler</code>.
-	 * 
-	 * @param cql The Query
-	 * @param rch The implementation for processing the rows returned.
-	 * @param options Query Options Object
-	 * @throws DataAccessException
-	 */
-	void query(String cql, RowCallbackHandler rch, QueryOptions options) throws DataAccessException;
-
-	/**
-	 * Processes the ResultSet through the RowCallbackHandler and return nothing. This is used internal to the Template
-	 * for core operations, but is made available through Operations in the event you have a ResultSet to process. The
-	 * ResultsSet could come from a ResultSetFuture after an asynchronous query.
-	 * 
-	 * @param resultSet Results to process
-	 * @param rch RowCallbackHandler with the processing implementation
-	 * @throws DataAccessException
-	 */
-	void process(ResultSet resultSet, RowCallbackHandler rch) throws DataAccessException;
-
-	/**
-	 * Executes the provided CQL Query, and maps all Rows returned with the supplied RowMapper.
-	 * 
-	 * @param cql The Query
-	 * @param rowMapper The implementation for mapping all rows
-	 * @return List of <T> processed by the RowMapper
-	 * @throws DataAccessException
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @param rowMapper object that will map one object per row, must not be {@literal null}.
+	 * @return the result {@link List}, containing mapped objects.
+	 * @throws DataAccessException if there is any problem executing the query
+	 * @see #query(String, RowMapper, Object[])
 	 */
 	<T> List<T> query(String cql, RowMapper<T> rowMapper) throws DataAccessException;
 
 	/**
-	 * Executes the provided Select Query, and maps all Rows returned with the supplied RowMapper.
-	 * 
-	 * @param select The Select Query
-	 * @param rowMapper The implementation for mapping all rows
-	 * @return List of <T> processed by the RowMapper
-	 * @throws DataAccessException
-	 */
-	<T> List<T> query(Select select, RowMapper<T> rowMapper) throws DataAccessException;
-
-	/**
-	 * Executes the provided CQL Query, and maps all Rows returned with the supplied RowMapper.
-	 * 
-	 * @param cql The Query
-	 * @param rowMapper The implementation for mapping all rows
-	 * @param options Query Options Object
-	 * @return List of <T> processed by the RowMapper
-	 * @throws DataAccessException
-	 */
-	<T> List<T> query(String cql, RowMapper<T> rowMapper, QueryOptions options) throws DataAccessException;
-
-	/**
-	 * Processes the ResultSet through the RowMapper and returns the List of mapped Rows. This is used internal to the
-	 * Template for core operations, but is made available through Operations in the event you have a ResultSet to
-	 * process. The ResultsSet could come from a ResultSetFuture after an asynchronous query.
-	 * 
-	 * @param resultSet Results to process
-	 * @param rowMapper RowMapper with the processing implementation
-	 * @return List of <T> generated by the RowMapper
-	 * @throws DataAccessException
-	 */
-	<T> List<T> process(ResultSet resultSet, RowMapper<T> rowMapper) throws DataAccessException;
-
-	/**
-	 * Executes the provided string CQL query, and maps the first row returned with the supplied {@link RowMapper}.
-	 * 
-	 * @param cql The string query CQL.
-	 * @param rowMapper The {@link RowMapper} to convert the row into an object of type <code>T</code>.
-	 * @param listener The listener that receives the results upon completion.
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 * @throws DataAccessException
-	 */
-	<T> Cancellable queryForObjectAsynchronously(String cql, RowMapper<T> rowMapper, QueryForObjectListener<T> listener)
-			throws DataAccessException;
-
-	/**
-	 * Executes the provided string CQL query, and maps the first row returned with the supplied {@link RowMapper}.
-	 * 
-	 * @param cql The string query CQL.
-	 * @param rowMapper The {@link RowMapper} to convert the row into an object of type <code>T</code>.
-	 * @param listener The listener that receives the results upon completion.
-	 * @param options The {@link QueryOptions} to use. May be <code>null</code>.
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 * @throws DataAccessException
-	 */
-	<T> Cancellable queryForObjectAsynchronously(String cql, RowMapper<T> rowMapper, QueryForObjectListener<T> listener,
-			QueryOptions options) throws DataAccessException;
-
-	/**
-	 * Executes the provided {@link Select} query, and maps the first row returned with the supplied {@link RowMapper}.
-	 * 
-	 * @param select The {@link Select} query to execute.
-	 * @param rowMapper The {@link RowMapper} to convert the row into an object of type <code>T</code>.
-	 * @param listener The listener that receives the results upon completion.
-	 * @return A {@link Cancellable} that can be used to cancel the query.
-	 * @throws DataAccessException
-	 */
-	<T> Cancellable queryForObjectAsynchronously(Select select, RowMapper<T> rowMapper,
-			QueryForObjectListener<T> listener) throws DataAccessException;
-
-	/**
-	 * Executes the provided CQL Query, and maps <b>ONE</b> Row returned with the supplied RowMapper.
+	 * Execute a query given static CQL, mapping a single result row to a Java object via a {@link RowMapper}.
 	 * <p>
-	 * This expects only ONE row to be returned. More than one Row will cause an Exception to be thrown.
-	 * </p>
+	 * Uses a CQL Statement, not a {@link PreparedStatement}. If you want to execute a static query with a
+	 * {@link PreparedStatement}, use the overloaded {@link #queryForObject(String, RowMapper, Object...)} method with
+	 * {@literal null} as argument array.
 	 * 
-	 * @param cql The Query
-	 * @param rowMapper The implementation for convert the Row to <T>
-	 * @return Object<T>
-	 * @throws DataAccessException
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @param rowMapper object that will map one object per row, must not be {@literal null}.
+	 * @return the single mapped object.
+	 * @throws IncorrectResultSizeDataAccessException if the query does not return exactly one row.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @see #queryForObject(String, RowMapper, Object[])
 	 */
 	<T> T queryForObject(String cql, RowMapper<T> rowMapper) throws DataAccessException;
 
 	/**
-	 * Executes the provided Select Query, and maps <b>ONE</b> Row returned with the supplied RowMapper.
+	 * Execute a query for a result object, given static CQL.
 	 * <p>
-	 * This expects only ONE row to be returned. More than one Row will cause an Exception to be thrown.
-	 * </p>
+	 * Uses a CQL Statement, not a {@link PreparedStatement}. If you want to execute a static query with a
+	 * {@link PreparedStatement}, use the overloaded {@link #queryForObject(String, Class, Object...)} method with
+	 * {@literal null} as argument array.
+	 * <p>
+	 * This method is useful for running static CQL with a known outcome. The query is expected to be a single row/single
+	 * column query; the returned result will be directly mapped to the corresponding object type.
 	 * 
-	 * @param select The Select Query
-	 * @param rowMapper The implementation for convert the Row to <T>
-	 * @return Object<T>
-	 * @throws DataAccessException
-	 */
-	<T> T queryForObject(Select select, RowMapper<T> rowMapper) throws DataAccessException;
-
-	/**
-	 * Process {@link ResultSet} with {@link RowMapper}. This method is used internally to the template for core
-	 * operations, but is made available through this interface in the event you have a {@link ResultSet} to process. The
-	 * {@link ResultSet} could come from a {@link ResultSetFuture} after an asynchronous query.
-	 *
-	 * @param resultSet {@link ResultSet} to process, must not be {@literal null}.
-	 * @param rowMapper {@link RowMapper} used to process the single row of the result set, must not be {@literal null}.
-	 * @throws IncorrectResultSizeDataAccessException if no rows are found, or more than 1 row is found.
-	 * @throws DataAccessException if a Cassandra driver error occurs.
-	 */
-	<T> T processOne(ResultSet resultSet, RowMapper<T> rowMapper) throws DataAccessException;
-
-	/**
-	 * Executes the provided query and tries to return the first column of the first Row as a Class<T>.
-	 * 
-	 * @param cql The Query
-	 * @param requiredType Valid Class that Cassandra Data Types can be converted to.
-	 * @return The Object<T> - item [0,0] in the result table of the query.
-	 * @throws DataAccessException
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @param requiredType the type that the result object is expected to match, must not be {@literal null}.
+	 * @return the result object of the required type, or {@link Mono#empty()} in case of CQL NULL.
+	 * @throws IncorrectResultSizeDataAccessException if the query does not return exactly one row, or does not return
+	 *           exactly one column in that row.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @see #queryForObject(String, Class, Object[])
 	 */
 	<T> T queryForObject(String cql, Class<T> requiredType) throws DataAccessException;
 
 	/**
-	 * Executes the provided {@link Select} query and returns the first column of the first Row as an object of type
-	 * <code>T</code>.
+	 * Execute a query for a result Map, given static CQL.
+	 * <p>
+	 * Uses a CQL Statement, not a {@link PreparedStatement}. If you want to execute a static query with a
+	 * {@link PreparedStatement}, use the overloaded {@link #queryForMap(String, Object...)} method with {@literal null}
+	 * as argument array.
+	 * <p>
+	 * The query is expected to be a single row query; the result row will be mapped to a Map (one entry for each column,
+	 * using the column name as the key).
 	 * 
-	 * @param select The {@link Select} query
-	 * @param requiredType Type that Cassandra data types can be converted to.
-	 * @return A {@link Cancellable} that can be used to cancel the query if necessary.
-	 * @throws DataAccessException
-	 */
-	<T> Cancellable queryForObjectAsynchronously(Select select, Class<T> requiredType, QueryForObjectListener<T> listener)
-			throws DataAccessException;
-
-	/**
-	 * Executes the provided select CQL query and returns the first column of the first Row as an object of type
-	 * <code>T</code>.
-	 * 
-	 * @param cql The select query CQL. Must not be <code>null</code> or blank.
-	 * @param requiredType The type to convert the first column of the first row to. Must not be <code>null</code>.
-	 * @return A {@link Cancellable} that can be used to cancel the query if necessary. Must not be <code>null</code>.
-	 * @throws DataAccessException
-	 */
-	<T> Cancellable queryForObjectAsynchronously(String cql, Class<T> requiredType, QueryForObjectListener<T> listener)
-			throws DataAccessException;
-
-	/**
-	 * Executes the provided select CQL query and returns the first column of the first Row as an object of type
-	 * <code>T</code>.
-	 * 
-	 * @param cql The select query CQL. Must not be <code>null</code> or blank.
-	 * @param requiredType The type to convert the first column of the first row to. Must not be <code>null</code>.
-	 * @param options The {@link QueryOptions} to use. May be <code>null</code>.
-	 * @return A {@link Cancellable} that can be used to cancel the query if necessary. Must not be <code>null</code>.
-	 * @throws DataAccessException
-	 */
-	<T> Cancellable queryForObjectAsynchronously(String cql, Class<T> requiredType, QueryForObjectListener<T> listener,
-			QueryOptions options) throws DataAccessException;
-
-	/**
-	 * Executes the provided Select query and tries to return the first column of the first Row as a Class<T>.
-	 * 
-	 * @param select The Select Query
-	 * @param requiredType Valid Class that Cassandra Data Types can be converted to.
-	 * @return The Object<T> - item [0,0] in the result table of the query.
-	 * @throws DataAccessException
-	 */
-	<T> T queryForObject(Select select, Class<T> requiredType) throws DataAccessException;
-
-	/**
-	 * Process a ResultSet, trying to convert the first columns of the first Row to Class<T>. This is used internal to the
-	 * Template for core operations, but is made available through Operations in the event you have a ResultSet to
-	 * process. The ResultsSet could come from a ResultSetFuture after an asynchronous query.
-	 * 
-	 * @param resultSet
-	 * @param requiredType
-	 * @return
-	 * @throws DataAccessException
-	 */
-	<T> T processOne(ResultSet resultSet, Class<T> requiredType) throws DataAccessException;
-
-	/**
-	 * Executes the provided CQL Query and maps <b>ONE</b> Row to a basic Map of Strings and Objects. If more than one Row
-	 * is returned from the Query, an exception will be thrown.
-	 * 
-	 * @param cql The Query
-	 * @return Map representing the results of the Query
-	 * @throws DataAccessException
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @return the result Map (one entry for each column, using the column name as the key), must not be {@literal null}.
+	 * @throws IncorrectResultSizeDataAccessException if the query does not return exactly one row.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @see #queryForMap(String, Object[])
+	 * @see ColumnMapRowMapper
 	 */
 	Map<String, Object> queryForMap(String cql) throws DataAccessException;
 
 	/**
-	 * Executes the provided Select Query and maps <b>ONE</b> Row to a basic Map of Strings and Objects. If more than one
-	 * Row is returned from the Query, an exception will be thrown.
+	 * Execute a query for a result {@link List}, given static CQL.
+	 * <p>
+	 * Uses a CQL Statement, not a {@link PreparedStatement}. If you want to execute a static query with a
+	 * {@link PreparedStatement}, use the overloaded {@code queryForList} method with {@literal null} as argument array.
+	 * <p>
+	 * The results will be mapped to a {@link List} (one item for each row) of result objects, each of them matching the
+	 * specified element type.
 	 * 
-	 * @param select The Select Query
-	 * @return Map representing the results of the Query
-	 * @throws DataAccessException
-	 */
-	Map<String, Object> queryForMap(Select select) throws DataAccessException;
-
-	/**
-	 * Executes the provided CQL query asynchronously and maps the first row to a {@link Map}&lt;String,Object&gt;.
-	 * Additional rows are ignored.
-	 * 
-	 * @param cql The select query CQL. Must not be <code>null</code> or blank.
-	 * @param listener The {@link QueryForMapListener} that will recieve the results upon query completion. Must not be
-	 *          <code>null</code>.
-	 * @return A {@link Cancellable} that can be used to cancel the query if necessary. Must not be <code>null</code>.
-	 * @throws DataAccessException
-	 */
-	Cancellable queryForMapAsynchronously(String cql, QueryForMapListener listener) throws DataAccessException;
-
-	/**
-	 * Executes the provided CQL query asynchronously and maps the first row to a {@link Map}&lt;String,Object&gt;.
-	 * Additional rows are ignored.
-	 * 
-	 * @param cql The select query CQL. Must not be <code>null</code> or blank.
-	 * @param listener The {@link QueryForMapListener} that will recieve the results upon query completion. Must not be
-	 *          <code>null</code>.
-	 * @param options The {@link QueryOptions} to use. May be <code>null</code>.
-	 * @return A {@link Cancellable} that can be used to cancel the query if necessary. Must not be <code>null</code>.
-	 * @throws DataAccessException
-	 */
-	Cancellable queryForMapAsynchronously(String cql, QueryForMapListener listener, QueryOptions options)
-			throws DataAccessException;
-
-	/**
-	 * Executes the provided {@link Select} query asynchronously and maps the first row to a {@link Map}
-	 * &lt;String,Object&gt;. Additional rows are ignored.
-	 * 
-	 * @param cql The select query CQL. Must not be <code>null</code> or blank.
-	 * @param listener The {@link QueryForMapListener} that will recieve the results upon query completion. Must not be
-	 *          <code>null</code>.
-	 * @return A {@link Cancellable} that can be used to cancel the query if necessary. Must not be <code>null</code>.
-	 * @throws DataAccessException
-	 */
-	Cancellable queryForMapAsynchronously(Select select, QueryForMapListener listener) throws DataAccessException;
-
-	/**
-	 * Process a ResultSet with <b>ONE</b> Row and convert to a Map. This is used internal to the Template for core
-	 * operations, but is made available through Operations in the event you have a ResultSet to process. The ResultsSet
-	 * could come from a ResultSetFuture after an asynchronous query.
-	 * 
-	 * @param resultSet
-	 * @return
-	 * @throws DataAccessException
-	 */
-	Map<String, Object> processMap(ResultSet resultSet) throws DataAccessException;
-
-	/**
-	 * Executes the provided CQL and returns all values in the first column of the Results as a List of the Type in the
-	 * second argument.
-	 * 
-	 * @param cql The Query
-	 * @param elementType Type to cast the data values to
-	 * @return List of elementType
-	 * @throws DataAccessException
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @param elementType the required type of element in the result {@link List} (for example, {@code Integer.class}),
+	 *          must not be {@literal null}.
+	 * @return a {@link List} of objects that match the specified element type.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @see #queryForList(String, Class, Object[])
+	 * @see SingleColumnRowMapper
 	 */
 	<T> List<T> queryForList(String cql, Class<T> elementType) throws DataAccessException;
 
 	/**
-	 * Executes the provided Select Query and returns all values in the first column of the Results as a List of the Type
-	 * in the second argument.
+	 * Execute a query for a result {@link List}, given static CQL.
+	 * <p>
+	 * Uses a CQL Statement, not a {@link PreparedStatement}. If you want to execute a static query with a
+	 * {@link PreparedStatement}, use the overloaded {@code queryForList} method with {@literal null} as argument array.
+	 * <p>
+	 * The results will be mapped to a {@link List} (one item for each row) of {@link Map}s (one entry for each column
+	 * using the column name as the key). Each item in the {@link List} will be of the form returned by this interface's
+	 * queryForMap() methods.
 	 * 
-	 * @param select The Select Query
-	 * @param elementType Type to cast the data values to
-	 * @return List of elementType
-	 * @throws DataAccessException
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @return a {@link List} that contains a {@link Map} per row.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @see #queryForList(String, Object[])
 	 */
-	<T> List<T> queryForList(Select select, Class<T> elementType) throws DataAccessException;
+	List<Map<String, Object>> queryForList(String cql) throws DataAccessException;
 
 	/**
-	 * Executes the provided {@link Select} query asynchronously and returns all values in the first column of the results
-	 * as a {@link List} of the type in the second argument.
-	 * 
-	 * @param select The {@link Select} query
-	 * @param elementType The type to cast the data values to
-	 * @param listener The listener to receive the results asynchronously. Must not be <code>null</code>.
-	 * @return {@link Cancellable} to cancel the query if necessary
-	 * @throws DataAccessException
+	 * Execute a query for a ResultSet, given static CQL.
+	 * <p>
+	 * Uses a CQL Statement, not a {@link PreparedStatement}. If you want to execute a static query with a
+	 * {@link PreparedStatement}, use the overloaded {@code queryForResultSet} method with {@literal null} as argument
+	 * array.
+	 * <p>
+	 * The results will be mapped to an {@link ResultSet}.
+	 *
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @return a {@link ResultSet} representation.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @see #queryForResultSet(String, Object[])
 	 */
-	<T> Cancellable queryForListAsynchronously(Select select, Class<T> elementType, QueryForListListener<T> listener)
-			throws DataAccessException;
+	ResultSet queryForResultSet(String cql) throws DataAccessException;
 
 	/**
-	 * Executes the provided {@link Select} query asynchronously and returns all values in the first column of the results
-	 * as a {@link List} of the type in the second argument.
-	 * 
-	 * @param select The select query CQL
-	 * @param elementType The type to cast the data values to
-	 * @param listener The listener to receive the results asynchronously. Must not be <code>null</code>.
-	 * @return {@link Cancellable} to cancel the query if necessary
-	 * @throws DataAccessException
+	 * Execute a query for Rows, given static CQL.
+	 * <p>
+	 * Uses a CQL Statement, not a {@link PreparedStatement}. If you want to execute a static query with a
+	 * {@link PreparedStatement}, use the overloaded {@code queryForResultSet} method with {@literal null} as argument
+	 * array.
+	 * <p>
+	 * The results will be mapped to {@link Row}s.
+	 *
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @return a Row representation.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @see #queryForResultSet(String, Object[])
 	 */
-	<T> Cancellable queryForListAsynchronously(String select, Class<T> elementType, QueryForListListener<T> listener)
-			throws DataAccessException;
+	Iterator<Row> queryForRows(String cql) throws DataAccessException;
+
+	// -------------------------------------------------------------------------
+	// Methods dealing with com.datastax.driver.core.Statement
+	// -------------------------------------------------------------------------
 
 	/**
-	 * Process a ResultSet and convert the first column of the results to a List. This is used internal to the Template
-	 * for core operations, but is made available through Operations in the event you have a ResultSet to process. The
-	 * ResultsSet could come from a ResultSetFuture after an asynchronous query.
-	 * 
-	 * @param resultSet
-	 * @param elementType
-	 * @return
-	 * @throws DataAccessException
+	 * Issue a single CQL execute, typically a DDL statement, insert, update or delete statement.
+	 *
+	 * @param statement static CQL {@link Statement}, must not be {@literal null}.
+	 * @return boolean value whether the statement was applied.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> List<T> processList(ResultSet resultSet, Class<T> elementType) throws DataAccessException;
+	boolean execute(Statement statement) throws DataAccessException;
 
 	/**
-	 * Executes the provided CQL and converts the results to a basic List of Maps. Each element in the List represents a
-	 * Row returned from the Query. Each Row's columns are put into the map as column/value.
-	 * 
-	 * @param cql The Query
-	 * @return List of Maps with the query results
-	 * @throws DataAccessException
+	 * Execute a query given static CQL, reading the {@link ResultSet} with a {@link ResultSetExtractor}.
+	 * <p>
+	 * Uses a CQL Statement, not a {@link PreparedStatement}. If you want to execute a static query with a
+	 * {@link PreparedStatement}, use the overloaded {@code query} method with {@literal null} as argument array.
+	 *
+	 * @param statement static CQL {@link Statement}, must not be {@literal null}.
+	 * @param rse object that will extract all rows of results, must not be {@literal null}.
+	 * @return an arbitrary result object, as returned by the ResultSetExtractor.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @see #query(String, ResultSetExtractor, Object...)
 	 */
-	List<Map<String, Object>> queryForListOfMap(String cql) throws DataAccessException;
+	<T> T query(Statement statement, ResultSetExtractor<T> rse) throws DataAccessException;
 
 	/**
-	 * Executes the provided {@link Select} query and converts the results to a {@link List} of {@link Map}s. Each element
-	 * in the {@link List} represents a row returned from the query. Each row's column(s) are put into a {@link Map} as
-	 * values keyed by column name.
-	 * 
-	 * @param select The {@link Select} query. Must not be <code>null</code>.
-	 * @param listener The listener that will receive the results upon query completion. Must not be <code>null</code>.
-	 * @return A {@link Cancellable} that can be used to cancel the query. Must not be <code>null</code>.
-	 * @throws DataAccessException
+	 * Execute a query given static CQL, reading the {@link ResultSet} on a per-row basis with a
+	 * {@link RowCallbackHandler}.
+	 * <p>
+	 * Uses a CQL Statement, not a {@link PreparedStatement}. If you want to execute a static query with a
+	 * {@link PreparedStatement}, use the overloaded {@code query} method with {@code null} as argument array.
+	 *
+	 * @param statement static CQL {@link Statement}, must not be {@literal null}.
+	 * @param rch object that will extract results, one row at a time, must not be {@literal null}.
+	 * @throws DataAccessException if there is any problem executing the query
+	 * @see #query(String, RowCallbackHandler, Object[])
 	 */
-	Cancellable queryForListOfMapAsynchronously(Select select, QueryForListListener<Map<String, Object>> listener)
-			throws DataAccessException;
+	void query(Statement statement, RowCallbackHandler rch) throws DataAccessException;
 
 	/**
-	 * Executes the provided select CQL query and converts the results to a {@link List} of {@link Map}s. Each element in
-	 * the {@link List} represents a row returned from the query. Each row's column(s) are put into a {@link Map} as
-	 * values keyed by column name.
-	 * 
-	 * @param select The select query CQL. Must not be <code>null</code> or blank.
-	 * @param listener The listener that will receive the results upon query completion. Must not be <code>null</code>.
-	 * @return A {@link Cancellable} that can be used to cancel the query. Must not be <code>null</code>.
-	 * @throws DataAccessException
+	 * Execute a query given static CQL, mapping each row to a Java object via a {@link RowMapper}.
+	 * <p>
+	 * Uses a CQL Statement, not a {@link PreparedStatement}. If you want to execute a static query with a
+	 * {@link PreparedStatement}, use the overloaded {@code query} method with {@literal null} as argument array.
+	 *
+	 * @param statement static CQL {@link Statement}, must not be {@literal null}.
+	 * @param rowMapper object that will map one object per row, must not be {@literal null}.
+	 * @return the result {@link List}, containing mapped objects.
+	 * @throws DataAccessException if there is any problem executing the query
+	 * @see #query(String, RowMapper, Object[])
 	 */
-	Cancellable queryForListOfMapAsynchronously(String cql, QueryForListListener<Map<String, Object>> listener)
-			throws DataAccessException;
+	<T> List<T> query(Statement statement, RowMapper<T> rowMapper) throws DataAccessException;
 
 	/**
-	 * Executes the provided select CQL query and converts the results to a {@link List} of {@link Map}s. Each element in
-	 * the {@link List} represents a row returned from the query. Each row's column(s) are put into a {@link Map} as
-	 * values keyed by column name.
-	 * 
-	 * @param select The select query CQL. Must not be <code>null</code> or blank.
-	 * @param listener The listener that will receive the results upon query completion. Must not be <code>null</code>.
-	 * @param options The {@link QueryOptions} to use. May be <code>null</code>.
-	 * @return A {@link Cancellable} that can be used to cancel the query. Must not be <code>null</code>.
-	 * @throws DataAccessException
+	 * Execute a query given static CQL, mapping a single result row to a Java object via a {@link RowMapper}.
+	 * <p>
+	 * Uses a CQL Statement, not a {@link PreparedStatement}. If you want to execute a static query with a
+	 * {@link PreparedStatement}, use the overloaded {@link #queryForObject(String, RowMapper, Object...)} method with
+	 * {@literal null} as argument array.
+	 *
+	 * @param statement static CQL {@link Statement}, must not be {@literal null}.
+	 * @param rowMapper object that will map one object per row, must not be {@literal null}.
+	 * @return the single mapped object.
+	 * @throws IncorrectResultSizeDataAccessException if the query does not return exactly one row.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @see #queryForObject(String, RowMapper, Object[])
 	 */
-	Cancellable queryForListOfMapAsynchronously(String cql, QueryForListListener<Map<String, Object>> listener,
-			QueryOptions options) throws DataAccessException;
+	<T> T queryForObject(Statement statement, RowMapper<T> rowMapper) throws DataAccessException;
 
 	/**
-	 * Executes the provided Select Query and converts the results to a basic List of Maps. Each element in the List
-	 * represents a Row returned from the Query. Each Row's columns are put into the map as column/value.
-	 * 
-	 * @param select The Select Query
-	 * @return List of Maps with the query results
-	 * @throws DataAccessException
+	 * Execute a query for a result object, given static CQL.
+	 * <p>
+	 * Uses a CQL Statement, not a {@link PreparedStatement}. If you want to execute a static query with a
+	 * {@link PreparedStatement}, use the overloaded {@link #queryForObject(String, Class, Object...)} method with
+	 * {@literal null} as argument array.
+	 * <p>
+	 * This method is useful for running static CQL with a known outcome. The query is expected to be a single row/single
+	 * column query; the returned result will be directly mapped to the corresponding object type.
+	 *
+	 * @param statement static CQL {@link Statement}, must not be {@literal null}.
+	 * @param requiredType the type that the result object is expected to match, must not be {@literal null}.
+	 * @return the result object of the required type, or {@link Mono#empty()} in case of CQL NULL.
+	 * @throws IncorrectResultSizeDataAccessException if the query does not return exactly one row, or does not return
+	 *           exactly one column in that row.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @see #queryForObject(String, Class, Object[])
 	 */
-	List<Map<String, Object>> queryForListOfMap(Select select) throws DataAccessException;
+	<T> T queryForObject(Statement statement, Class<T> requiredType) throws DataAccessException;
 
 	/**
-	 * Process a ResultSet and convert it to a List of Maps with column/value. This is used internal to the Template for
-	 * core operations, but is made available through Operations in the event you have a ResultSet to process. The
-	 * ResultsSet could come from a ResultSetFuture after an asynchronous query.
-	 * 
-	 * @param resultSet
-	 * @return
-	 * @throws DataAccessException
+	 * Execute a query for a result Map, given static CQL.
+	 * <p>
+	 * Uses a CQL Statement, not a {@link PreparedStatement}. If you want to execute a static query with a
+	 * {@link PreparedStatement}, use the overloaded {@link #queryForMap(String, Object...)} method with {@literal null}
+	 * as argument array.
+	 * <p>
+	 * The query is expected to be a single row query; the result row will be mapped to a Map (one entry for each column,
+	 * using the column name as the key).
+	 *
+	 * @param statement static CQL {@link Statement}, must not be {@literal null}.
+	 * @return the result Map (one entry for each column, using the column name as the key), must not be {@literal null}.
+	 * @throws IncorrectResultSizeDataAccessException if the query does not return exactly one row.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @see #queryForMap(String, Object[])
+	 * @see ColumnMapRowMapper
 	 */
-	List<Map<String, Object>> processListOfMap(ResultSet resultSet) throws DataAccessException;
+	Map<String, Object> queryForMap(Statement statement) throws DataAccessException;
 
 	/**
-	 * Creates and caches a {@link PreparedStatement} from the given CQL, invokes the {@link PreparedStatementCallback}
-	 * with that {@link PreparedStatement}, then returns the value returned by the {@link PreparedStatementCallback}.
-	 * 
-	 * @param cql The CQL statement from which to create and cache a {@link PreparedStatement}
-	 * @param action The callback that is given the {@link PreparedStatement}
-	 * @return The value returned by the given {@link PreparedStatementCallback}
-	 * @throws DataAccessException
+	 * Execute a query for a result {@link List}, given static CQL.
+	 * <p>
+	 * Uses a CQL Statement, not a {@link PreparedStatement}. If you want to execute a static query with a
+	 * {@link PreparedStatement}, use the overloaded {@code queryForList} method with {@literal null} as argument array.
+	 * <p>
+	 * The results will be mapped to a {@link List} (one item for each row) of result objects, each of them matching the
+	 * specified element type.
+	 *
+	 * @param statement static CQL {@link Statement}, must not be {@literal null}.
+	 * @param elementType the required type of element in the result {@link List} (for example, {@code Integer.class}),
+	 *          must not be {@literal null}.
+	 * @return a {@link List} of objects that match the specified element type.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @see #queryForList(String, Class, Object[])
+	 * @see SingleColumnRowMapper
 	 */
-	<T> T execute(String cql, PreparedStatementCallback<T> action) throws DataAccessException;
+	<T> List<T> queryForList(Statement statement, Class<T> elementType) throws DataAccessException;
 
 	/**
-	 * Uses the provided {@link PreparedStatementCreator} to create a {@link PreparedStatement} in the current
-	 * {@link Session}, then passes that {@link PreparedStatement} to the given {@link PreparedStatementCallback}.
+	 * Execute a query for a result {@link List}, given static CQL.
+	 * <p>
+	 * Uses a CQL Statement, not a {@link PreparedStatement}. If you want to execute a static query with a
+	 * {@link PreparedStatement}, use the overloaded {@code queryForList} method with {@literal null} as argument array.
+	 * <p>
+	 * The results will be mapped to a {@link List} (one item for each row) of {@link Map}s (one entry for each column
+	 * using the column name as the key). Each item in the {@link List} will be of the form returned by this interface's
+	 * queryForMap() methods.
+	 *
+	 * @param statement static CQL {@link Statement} to execute, must not be empty or {@literal null}.
+	 * @return a {@link List} that contains a {@link Map} per row.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @see #queryForList(String, Object[])
+	 */
+	List<Map<String, Object>> queryForList(Statement statement) throws DataAccessException;
+
+	/**
+	 * Execute a query for a ResultSet, given static CQL.
+	 * <p>
+	 * Uses a CQL Statement, not a {@link PreparedStatement}. If you want to execute a static query with a
+	 * {@link PreparedStatement}, use the overloaded {@code queryForResultSet} method with {@literal null} as argument
+	 * array.
+	 * <p>
+	 * The results will be mapped to an {@link ResultSet}.
+	 *
+	 * @param statement static CQL {@link Statement}, must not be {@literal null}.
+	 * @return a {@link ResultSet} representation.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @see #queryForResultSet(String, Object[])
+	 */
+	ResultSet queryForResultSet(Statement statement) throws DataAccessException;
+
+	/**
+	 * Execute a query for Rows, given static CQL.
+	 * <p>
+	 * Uses a CQL Statement, not a {@link PreparedStatement}. If you want to execute a static query with a
+	 * {@link PreparedStatement}, use the overloaded {@code queryForResultSet} method with {@literal null} as argument
+	 * array.
+	 * <p>
+	 * The results will be mapped to {@link Row}s.
+	 *
+	 * @param statement static CQL {@link Statement}, must not be {@literal null}.
+	 * @return a Row representation.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @see #queryForResultSet(String, Object[])
+	 */
+	Iterator<Row> queryForRows(Statement statement) throws DataAccessException;
+
+	// -------------------------------------------------------------------------
+	// Methods dealing with prepared statements
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Execute a CQL data access operation, implemented as callback action working on a CQL {@link PreparedStatement}.
+	 * This allows for implementing arbitrary data access operations on a single {@link PreparedStatement}, within
+	 * Spring's managed CQL environment: that is, participating in Spring-managed transactions and converting CQL
+	 * {@link com.datastax.driver.core.exceptions.DriverException}s into Spring's {@link DataAccessException} hierarchy.
+	 * <p>
+	 * The callback action can return a result object, for example a domain object or a collection of domain objects.
 	 * 
-	 * @param psc The {@link PreparedStatementCreator}
-	 * @param action The callback that receives the {@link PreparedStatement}
-	 * @return The value returned by the given {@link PreparedStatementCallback}
-	 * @throws DataAccessException
+	 * @param psc object that can create a {@link PreparedStatement} given a {@link com.datastax.driver.core.Session},
+	 *          must not be {@literal null}.
+	 * @param action callback object that specifies the action, must not be {@literal null}.
+	 * @return a result object returned by the action, or {@literal null}.
+	 * @throws DataAccessException if there is any problem
 	 */
 	<T> T execute(PreparedStatementCreator psc, PreparedStatementCallback<T> action) throws DataAccessException;
 
 	/**
-	 * Converts the CQL provided into a {@link CachedPreparedStatementCreator}. Then, the PreparedStatementBinder will
-	 * bind its values to the bind variables in the provided CQL String. The results of the PreparedStatement are
-	 * processed with the ResultSetExtractor implementation provided by the Application Code. The can return any object,
-	 * including a List of Objects to support the ResultSet processing.
+	 * Execute a CQL data access operation, implemented as callback action working on a CQL {@link PreparedStatement}.
+	 * This allows for implementing arbitrary data access operations on a single Statement, within Spring's managed CQL
+	 * environment: that is, participating in Spring-managed transactions and converting CQL
+	 * {@link com.datastax.driver.core.exceptions.DriverException}s into Spring's {@link DataAccessException} hierarchy.
+	 * <p>
+	 * The callback action can return a result object, for example a domain object or a collection of domain objects.
 	 * 
-	 * @param cql The Query to Prepare
-	 * @param psb The Binding implementation
-	 * @param rse The implementation for extracting the results of the query.
-	 * @return Type<T> generated by the ResultSetExtractor
-	 * @throws DataAccessException
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @param action callback object that specifies the action, must not be {@literal null}.
+	 * @return a result object returned by the action, or {@literal null}
+	 * @throws DataAccessException if there is any problem
 	 */
-	<T> T query(String cql, PreparedStatementBinder psb, ResultSetExtractor<T> rse) throws DataAccessException;
+	<T> T execute(String cql, PreparedStatementCallback<T> action) throws DataAccessException;
 
 	/**
-	 * Converts the CQL provided into a {@link CachedPreparedStatementCreator}. Then, the PreparedStatementBinder will
-	 * bind its values to the bind variables in the provided CQL String. The results of the PreparedStatement are
-	 * processed with the ResultSetExtractor implementation provided by the Application Code. The can return any object,
-	 * including a List of Objects to support the ResultSet processing.
+	 * Query using a prepared statement, reading the {@link ResultSet} with a {@link ResultSetExtractor}.
 	 * 
-	 * @param cql The Query to Prepare
-	 * @param psb The Binding implementation
-	 * @param rse The implementation for extracting the results of the query.
-	 * @param options The Query Options to apply to the PreparedStatement
-	 * @return Type<T> generated by the ResultSetExtractor
-	 * @throws DataAccessException
-	 */
-	<T> T query(String cql, PreparedStatementBinder psb, ResultSetExtractor<T> rse, QueryOptions options)
-			throws DataAccessException;
-
-	/**
-	 * Converts the CQL provided into a {@link CachedPreparedStatementCreator}. Then, the PreparedStatementBinder will
-	 * bind its values to the bind variables in the provided CQL String. The results of the PreparedStatement are
-	 * processed with the RowCallbackHandler implementation provided and nothing is returned.
-	 * 
-	 * @param cql The Query to Prepare
-	 * @param psb The Binding implementation
-	 * @param rch The RowCallbackHandler for processing the ResultSet
-	 * @throws DataAccessException
-	 */
-	void query(String cql, PreparedStatementBinder psb, RowCallbackHandler rch) throws DataAccessException;
-
-	/**
-	 * Converts the CQL provided into a {@link CachedPreparedStatementCreator}. Then, the PreparedStatementBinder will
-	 * bind its values to the bind variables in the provided CQL String. The results of the PreparedStatement are
-	 * processed with the RowCallbackHandler implementation provided and nothing is returned.
-	 * 
-	 * @param cql The Query to Prepare
-	 * @param psb The Binding implementation
-	 * @param rch The RowCallbackHandler for processing the ResultSet
-	 * @param options The Query Options Object
-	 * @throws DataAccessException
-	 */
-	void query(String cql, PreparedStatementBinder psb, RowCallbackHandler rch, QueryOptions options)
-			throws DataAccessException;
-
-	/**
-	 * Converts the CQL provided into a {@link CachedPreparedStatementCreator}. Then, the PreparedStatementBinder will
-	 * bind its values to the bind variables in the provided CQL String. The results of the PreparedStatement are
-	 * processed with the RowMapper implementation provided and a List is returned with elements of Type <T> for each Row
-	 * returned.
-	 * 
-	 * @param cql The Query to Prepare
-	 * @param psb The Binding implementation
-	 * @param rowMapper The implementation for Mapping a Row to Type <T>
-	 * @return List of <T> for each Row returned from the Query.
-	 * @throws DataAccessException
-	 */
-	<T> List<T> query(String cql, PreparedStatementBinder psb, RowMapper<T> rowMapper) throws DataAccessException;
-
-	/**
-	 * Converts the CQL provided into a {@link CachedPreparedStatementCreator}. Then, the PreparedStatementBinder will
-	 * bind its values to the bind variables in the provided CQL String. The results of the PreparedStatement are
-	 * processed with the RowMapper implementation provided and a List is returned with elements of Type <T> for each Row
-	 * returned.
-	 * 
-	 * @param cql The Query to Prepare
-	 * @param psb The Binding implementation
-	 * @param rowMapper The implementation for Mapping a Row to Type <T>
-	 * @param options The Query Options Object
-	 * @return List of <T> for each Row returned from the Query.
-	 * @throws DataAccessException
-	 */
-	<T> List<T> query(String cql, PreparedStatementBinder psb, RowMapper<T> rowMapper, QueryOptions options)
-			throws DataAccessException;
-
-	/**
-	 * Uses the provided PreparedStatementCreator to prepare a new Session call. <b>This can only be used for CQL
-	 * Statements that do not have data binding.</b> The results of the PreparedStatement are processed with
-	 * ResultSetExtractor implementation provided by the Application Code.
-	 * 
-	 * @param psc The implementation to create the PreparedStatement
-	 * @param rse Implementation for extracting from the ResultSet
-	 * @return Type <T> which is the output of the ResultSetExtractor
-	 * @throws DataAccessException
+	 * @param psc object that can create a {@link PreparedStatement} given a {@link com.datastax.driver.core.Session},
+	 *          must not be {@literal null}.
+	 * @param rse object that will extract results, must not be {@literal null}.
+	 * @return an arbitrary result object, as returned by the {@link ResultSetExtractor}
+	 * @throws DataAccessException if there is any problem
 	 */
 	<T> T query(PreparedStatementCreator psc, ResultSetExtractor<T> rse) throws DataAccessException;
 
 	/**
-	 * Uses the provided PreparedStatementCreator to prepare a new Session call. <b>This can only be used for CQL
-	 * Statements that do not have data binding.</b> The results of the PreparedStatement are processed with
-	 * ResultSetExtractor implementation provided by the Application Code.
+	 * Query using a prepared statement, reading the {@link ResultSet} with a {@link ResultSetExtractor}.
 	 * 
-	 * @param psc The implementation to create the PreparedStatement
-	 * @param rse Implementation for extracting from the ResultSet
-	 * @param options The Query Options Object
-	 * @return Type <T> which is the output of the ResultSetExtractor
-	 * @throws DataAccessException
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @param psb object that knows how to set values on the prepared statement. If this is {@literal null}, the CQL will
+	 *          be assumed to contain no bind parameters. Even if there are no bind parameters, this object may be used to
+	 *          set fetch size and other performance options.
+	 * @param rse object that will extract results, must not be {@literal null}.
+	 * @return an arbitrary result object, as returned by the {@link ResultSetExtractor}.
+	 * @throws DataAccessException if there is any problem
 	 */
-	<T> T query(PreparedStatementCreator psc, ResultSetExtractor<T> rse, QueryOptions options) throws DataAccessException;
+	<T> T query(String cql, PreparedStatementBinder psb, ResultSetExtractor<T> rse) throws DataAccessException;
 
 	/**
-	 * Uses the provided PreparedStatementCreator to prepare a new Session call. <b>This can only be used for CQL
-	 * Statements that do not have data binding.</b> The results of the PreparedStatement are processed with
-	 * RowCallbackHandler and nothing is returned.
-	 * 
-	 * @param psc The implementation to create the PreparedStatement
-	 * @param rch The implementation to process Results
-	 * @throws DataAccessException
-	 */
-	void query(PreparedStatementCreator psc, RowCallbackHandler rch) throws DataAccessException;
-
-	/**
-	 * Uses the provided PreparedStatementCreator to prepare a new Session call. <b>This can only be used for CQL
-	 * Statements that do not have data binding.</b> The results of the PreparedStatement are processed with
-	 * RowCallbackHandler and nothing is returned.
-	 * 
-	 * @param psc The implementation to create the PreparedStatement
-	 * @param rch The implementation to process Results
-	 * @param options The Query Options Object
-	 * @throws DataAccessException
-	 */
-	void query(PreparedStatementCreator psc, RowCallbackHandler rch, QueryOptions options) throws DataAccessException;
-
-	/**
-	 * Uses the provided PreparedStatementCreator to prepare a new Session call. <b>This can only be used for CQL
-	 * Statements that do not have data binding.</b> The results of the PreparedStatement are processed with RowMapper
-	 * implementation provided and a List is returned with elements of Type <T> for each Row returned.
-	 * 
-	 * @param psc The implementation to create the PreparedStatement
-	 * @param rowMapper The implementation for mapping each Row returned.
-	 * @return List of Type <T> mapped from each Row in the Results
-	 * @throws DataAccessException
-	 */
-	<T> List<T> query(PreparedStatementCreator psc, RowMapper<T> rowMapper) throws DataAccessException;
-
-	/**
-	 * Uses the provided PreparedStatementCreator to prepare a new Session call. <b>This can only be used for CQL
-	 * Statements that do not have data binding.</b> The results of the PreparedStatement are processed with RowMapper
-	 * implementation provided and a List is returned with elements of Type <T> for each Row returned.
-	 * 
-	 * @param psc The implementation to create the PreparedStatement
-	 * @param rowMapper The implementation for mapping each Row returned.
-	 * @param options The Query Options Object
-	 * @return List of Type <T> mapped from each Row in the Results
-	 * @throws DataAccessException
-	 */
-	<T> List<T> query(PreparedStatementCreator psc, RowMapper<T> rowMapper, QueryOptions options)
-			throws DataAccessException;
-
-	/**
-	 * Uses the provided PreparedStatementCreator to prepare a new Session call. Binds the values from the
-	 * PreparedStatementBinder to the available bind variables. The results of the PreparedStatement are processed with
-	 * ResultSetExtractor implementation provided by the Application Code.
-	 * 
-	 * @param psc The implementation to create the PreparedStatement
-	 * @param psb The implementation to bind variables to values
-	 * @param rse Implementation for extracting from the ResultSet
-	 * @param options The Query Options Object
-	 * @return Type <T> which is the output of the ResultSetExtractor
-	 * @throws DataAccessException
-	 */
-	<T> T query(PreparedStatementCreator psc, PreparedStatementBinder psb, ResultSetExtractor<T> rse, QueryOptions options)
-			throws DataAccessException;
-
-	/**
-	 * Uses the provided PreparedStatementCreator to prepare a new Session call. Binds the values from the
-	 * PreparedStatementBinder to the available bind variables. The results of the PreparedStatement are processed with
-	 * ResultSetExtractor implementation provided by the Application Code.
-	 * 
-	 * @param psc The implementation to create the PreparedStatement
-	 * @param psb The implementation to bind variables to values
-	 * @param rse Implementation for extracting from the ResultSet
-	 * @return Type <T> which is the output of the ResultSetExtractor
-	 * @throws DataAccessException
+	 * Query using a prepared statement and a {@link PreparedStatementBinder} implementation that knows how to bind values
+	 * to the query, reading the {@link ResultSet} with a {@link ResultSetExtractor}.
+	 *
+	 * @param psc object that can create a {@link PreparedStatement} given a {@link com.datastax.driver.core.Session},
+	 *          must not be {@literal null}.
+	 * @param psb object that knows how to set values on the prepared statement. If this is {@literal null}, the CQL will
+	 *          be assumed to contain no bind parameters. Even if there are no bind parameters, this object may be used to
+	 *          set fetch size and other performance options.
+	 * @param rse object that will extract results, must not be {@literal null}.
+	 * @return an arbitrary result object, as returned by the {@link ResultSetExtractor}.
+	 * @throws DataAccessException if there is any problem
 	 */
 	<T> T query(PreparedStatementCreator psc, PreparedStatementBinder psb, ResultSetExtractor<T> rse)
 			throws DataAccessException;
 
 	/**
-	 * Uses the provided PreparedStatementCreator to prepare a new Session call. Binds the values from the
-	 * PreparedStatementBinder to the available bind variables. The results of the PreparedStatement are processed with
-	 * RowCallbackHandler and nothing is returned.
+	 * Query given CQL to create a prepared statement from CQL and a list of arguments to bind to the query, reading the
+	 * {@link ResultSet} with a {@link ResultSetExtractor}.
 	 * 
-	 * @param psc The implementation to create the PreparedStatement
-	 * @param psb The implementation to bind variables to values
-	 * @param rch The implementation to process Results
-	 * @param options The Query Options Object
-	 * @return Type <T> which is the output of the ResultSetExtractor
-	 * @throws DataAccessException
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @param rse object that will extract results, must not be {@literal null}.
+	 * @param args arguments to bind to the query (leaving it to the {@link PreparedStatement} to guess the corresponding
+	 *          CQL type).
+	 * @return an arbitrary result object, as returned by the {@link ResultSetExtractor}
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	void query(PreparedStatementCreator psc, PreparedStatementBinder psb, RowCallbackHandler rch, QueryOptions options)
-			throws DataAccessException;
+	<T> T query(String cql, ResultSetExtractor<T> rse, Object... args) throws DataAccessException;
 
 	/**
-	 * Uses the provided PreparedStatementCreator to prepare a new Session call. Binds the values from the
-	 * PreparedStatementBinder to the available bind variables. The results of the PreparedStatement are processed with
-	 * RowCallbackHandler and nothing is returned.
+	 * Query using a prepared statement, reading the {@link ResultSet} on a per-row basis with a
+	 * {@link RowCallbackHandler}.
 	 * 
-	 * @param psc The implementation to create the PreparedStatement
-	 * @param psb The implementation to bind variables to values
-	 * @param rch The implementation to process Results
-	 * @return Type <T> which is the output of the ResultSetExtractor
-	 * @throws DataAccessException
+	 * @param psc object that can create a {@link PreparedStatement} given a {@link com.datastax.driver.core.Session},
+	 *          must not be {@literal null}.
+	 * @param rch object that will extract results, one row at a time, must not be {@literal null}.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 */
+	void query(PreparedStatementCreator psc, RowCallbackHandler rch) throws DataAccessException;
+
+	/**
+	 * Query given CQL to create a prepared statement from CQL and a {@link PreparedStatementBinder} implementation that
+	 * knows how to bind values to the query, reading the {@link ResultSet} on a per-row basis with a
+	 * {@link RowCallbackHandler}.
+	 * 
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @param psb object that knows how to set values on the prepared statement. If this is {@literal null}, the CQL will
+	 *          be assumed to contain no bind parameters. Even if there are no bind parameters, this object may be used to
+	 *          set fetch size and other performance options.
+	 * @param rch object that will extract results, one row at a time, must not be {@literal null}.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 */
+	void query(String cql, PreparedStatementBinder psb, RowCallbackHandler rch) throws DataAccessException;
+
+	/**
+	 * Query using a prepared statement and a {@link PreparedStatementBinder} implementation that knows how to bind values
+	 * to the query, reading the {@link ResultSet} on a per-row basis with a {@link RowCallbackHandler}.
+	 *
+	 * @param psc object that can create a {@link PreparedStatement} given a {@link com.datastax.driver.core.Session},
+	 *          must not be {@literal null}.
+	 * @param psb object that knows how to set values on the prepared statement. If this is {@literal null}, the CQL will
+	 *          be assumed to contain no bind parameters. Even if there are no bind parameters, this object may be used to
+	 *          set fetch size and other performance options.
+	 * @param rch object that will extract results, one row at a time, must not be {@literal null}.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
 	void query(PreparedStatementCreator psc, PreparedStatementBinder psb, RowCallbackHandler rch)
 			throws DataAccessException;
 
 	/**
-	 * Uses the provided PreparedStatementCreator to prepare a new Session call. Binds the values from the
-	 * PreparedStatementBinder to the available bind variables. The results of the PreparedStatement are processed with
-	 * RowMapper implementation provided and a List is returned with elements of Type <T> for each Row returned.
+	 * Query given CQL to create a prepared statement from CQL and a list of arguments to bind to the query, reading the
+	 * {@link ResultSet} on a per-row basis with a {@link RowCallbackHandler}.
 	 * 
-	 * @param psc The implementation to create the PreparedStatement
-	 * @param psb The implementation to bind variables to values
-	 * @param rowMapper The implementation for mapping each Row returned.
-	 * @param options The Query Options Object
-	 * @return Type <T> which is the output of the ResultSetExtractor
-	 * @throws DataAccessException
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @param rch object that will extract results, one row at a time, must not be {@literal null}.
+	 * @param args arguments to bind to the query (leaving it to the {@link PreparedStatement} to guess the corresponding
+	 *          CQL type)
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
-	<T> List<T> query(PreparedStatementCreator psc, PreparedStatementBinder psb, RowMapper<T> rowMapper,
-			QueryOptions options) throws DataAccessException;
+	void query(String cql, RowCallbackHandler rch, Object... args) throws DataAccessException;
 
 	/**
-	 * Uses the provided PreparedStatementCreator to prepare a new Session call. Binds the values from the
-	 * PreparedStatementBinder to the available bind variables. The results of the PreparedStatement are processed with
-	 * RowMapper implementation provided and a List is returned with elements of Type <T> for each Row returned.
-	 * 
-	 * @param psc The implementation to create the PreparedStatement
-	 * @param psb The implementation to bind variables to values
-	 * @param rowMapper The implementation for mapping each Row returned.
-	 * @return Type <T> which is the output of the ResultSetExtractor
-	 * @throws DataAccessException
+	 * Query using a prepared statement, mapping each row to a Java object via a {@link RowMapper}.
+	 *
+	 * @param psc object that can create a {@link PreparedStatement} given a {@link com.datastax.driver.core.Session},
+	 *          must not be {@literal null}.
+	 * @param rowMapper object that will map one object per row, must not be {@literal null}.
+	 * @return the result {@link List}, containing mapped objects.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 */
+	<T> List<T> query(PreparedStatementCreator psc, RowMapper<T> rowMapper) throws DataAccessException;
+
+	/**
+	 * Query given CQL to create a prepared statement from CQL and a {@link PreparedStatementBinder} implementation that
+	 * knows how to bind values to the query, mapping each row to a Java object via a {@link RowMapper}.
+	 *
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @param psb object that knows how to set values on the prepared statement. If this is {@literal null}, the CQL will
+	 *          be assumed to contain no bind parameters. Even if there are no bind parameters, this object may be used to
+	 *          set fetch size and other performance options.
+	 * @param rowMapper object that will map one object per row, must not be {@literal null}.
+	 * @return the result {@link List}, containing mapped objects.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 */
+	<T> List<T> query(String cql, PreparedStatementBinder psb, RowMapper<T> rowMapper) throws DataAccessException;
+
+	/**
+	 * Query using a prepared statement and a {@link PreparedStatementBinder} implementation that knows how to bind values
+	 * to the query, mapping each row to a Java object via a {@link RowMapper}.
+	 *
+	 * @param psc object that can create a {@link PreparedStatement} given a {@link com.datastax.driver.core.Session},
+	 *          must not be {@literal null}.
+	 * @param psb object that knows how to set values on the prepared statement. If this is {@literal null}, the CQL will
+	 *          be assumed to contain no bind parameters. Even if there are no bind parameters, this object may be used to
+	 *          set fetch size and other performance options.
+	 * @param rowMapper object that will map one object per row, must not be {@literal null}.
+	 * @return the result {@link List}, containing mapped objects.
+	 * @throws DataAccessException if there is any problem executing the query.
 	 */
 	<T> List<T> query(PreparedStatementCreator psc, PreparedStatementBinder psb, RowMapper<T> rowMapper)
 			throws DataAccessException;
 
 	/**
+	 * Query given CQL to create a prepared statement from CQL and a list of arguments to bind to the query, mapping each
+	 * row to a Java object via a {@link RowMapper}.
+	 *
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @param rowMapper object that will map one object per row
+	 * @param args arguments to bind to the query (leaving it to the {@link PreparedStatement} to guess the corresponding
+	 *          CQL type)
+	 * @return the result {@link List}, containing mapped objects
+	 * @throws DataAccessException if there is any problem executing the query.
+	 */
+	<T> List<T> query(String cql, RowMapper<T> rowMapper, Object... args) throws DataAccessException;
+
+	/**
+	 * Query given CQL to create a prepared statement from CQL and a list of arguments to bind to the query, mapping a
+	 * single result row to a Java object via a {@link RowMapper}.
+	 * 
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @param rowMapper object that will map one object per row, must not be {@literal null}.
+	 * @param args arguments to bind to the query (leaving it to the {@link PreparedStatement} to guess the corresponding
+	 *          CQL type)
+	 * @return the single mapped object
+	 * @throws IncorrectResultSizeDataAccessException if the query does not return exactly one row.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 */
+	<T> T queryForObject(String cql, RowMapper<T> rowMapper, Object... args) throws DataAccessException;
+
+	/**
+	 * Query given CQL to create a prepared statement from CQL and a list of arguments to bind to the query, expecting a
+	 * result object.
+	 * <p>
+	 * The query is expected to be a single row/single column query; the returned result will be directly mapped to the
+	 * corresponding object type.
+	 * 
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @param requiredType the type that the result object is expected to match, must not be {@literal null}.
+	 * @param args arguments to bind to the query (leaving it to the PreparedStatement to guess the corresponding CQL
+	 *          type)
+	 * @return the result object of the required type, or {@link Mono#empty()} in case of CQL NULL.
+	 * @throws IncorrectResultSizeDataAccessException if the query does not return exactly one row, or does not return
+	 *           exactly one column in that row.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @see #queryForObject(String, Class)
+	 */
+	<T> T queryForObject(String cql, Class<T> requiredType, Object... args) throws DataAccessException;
+
+	/**
+	 * Query given CQL to create a prepared statement from CQL and a list of arguments to bind to the query, expecting a
+	 * result Map. The queryForMap() methods defined by this interface are appropriate when you don't have a domain model.
+	 * Otherwise, consider using one of the queryForObject() methods.
+	 * <p>
+	 * The query is expected to be a single row query; the result row will be mapped to a Map (one entry for each column,
+	 * using the column name as the key).
+	 * 
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @param args arguments to bind to the query (leaving it to the {@link PreparedStatement} to guess the corresponding
+	 *          CQL type).
+	 * @return the result Map (one entry for each column, using the column name as the key).
+	 * @throws IncorrectResultSizeDataAccessException if the query does not return exactly one row
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @see #queryForMap(String)
+	 * @see ColumnMapRowMapper
+	 */
+	Map<String, Object> queryForMap(String cql, Object... args) throws DataAccessException;
+
+	/**
+	 * Query given CQL to create a prepared statement from CQL and a list of arguments to bind to the query, expecting a
+	 * result {@link List}.
+	 * <p>
+	 * The results will be mapped to a {@link List} (one item for each row) of result objects, each of them matching the
+	 * specified element type.
+	 * 
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @param elementType the required type of element in the result {@link List} (for example, {@code Integer.class}),
+	 *          must not be {@literal null}.
+	 * @param args arguments to bind to the query (leaving it to the {@link PreparedStatement} to guess the corresponding
+	 *          CQL type).
+	 * @return a {@link List} of objects that match the specified element type.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @see #queryForList(String, Class)
+	 * @see SingleColumnRowMapper
+	 */
+	<T> List<T> queryForList(String cql, Class<T> elementType, Object... args) throws DataAccessException;
+
+	/**
+	 * Query given CQL to create a prepared statement from CQL and a list of arguments to bind to the query, expecting a
+	 * result {@link List}.
+	 * <p>
+	 * The results will be mapped to a {@link List} (one item for each row) of {@link Map}s (one entry for each column,
+	 * using the column name as the key). Each item in the {@link List} will be of the form returned by this interface's
+	 * queryForMap() methods.
+	 * 
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @param args arguments to bind to the query (leaving it to the {@link PreparedStatement} to guess the corresponding
+	 *          CQL type).
+	 * @return a {@link List} that contains a {@link Map} per row
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @see #queryForList(String)
+	 */
+	List<Map<String, Object>> queryForList(String cql, Object... args) throws DataAccessException;
+
+	/**
+	 * Query given CQL to create a prepared statement from CQL and a list of arguments to bind to the query, expecting a
+	 * ResultSet.
+	 * <p>
+	 * The results will be mapped to an {@link ResultSet}.
+	 *
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @param args arguments to bind to the query (leaving it to the {@link PreparedStatement} to guess the corresponding
+	 *          CQL type).
+	 * @return a {@link ResultSet} representation.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @see #queryForResultSet(String)
+	 */
+	ResultSet queryForResultSet(String cql, Object... args) throws DataAccessException;
+
+	/**
+	 * Query given CQL to create a prepared statement from CQL and a list of arguments to bind to the query, expecting
+	 * Rows.
+	 * <p>
+	 * The results will be mapped to {@link Row}s.
+	 *
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @param args arguments to bind to the query (leaving it to the {@link PreparedStatement} to guess the corresponding
+	 *          CQL type).
+	 * @return a {@link Row} representation.
+	 * @throws DataAccessException if there is any problem executing the query.
+	 * @see #queryForResultSet(String)
+	 */
+	Iterator<Row> queryForRows(String cql, Object... args) throws DataAccessException;
+
+	/**
+	 * Issue a single CQL execute operation (such as an insert, update or delete statement) using a
+	 * {@link PreparedStatementCreator} to provide CQL and any required parameters.
+	 *
+	 * @param psc object that provides CQL and any necessary parameters, must not be {@literal null}.
+	 * @return boolean value whether the statement was applied.
+	 * @throws DataAccessException if there is any problem issuing the execution.
+	 */
+	// TODO: Interferes with execute(session callback lambda)
+	boolean execute(PreparedStatementCreator psc) throws DataAccessException;
+
+	/**
+	 * Issue an statement using a {@link PreparedStatementBinder} to set bind parameters, with given CQL. Simpler than
+	 * using a {@link PreparedStatementCreator} as this method will create the {@link PreparedStatement}: The
+	 * {@link PreparedStatementBinder} just needs to set parameters.
+	 *
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @param psb object that knows how to set values on the prepared statement. If this is {@literal null}, the CQL will
+	 *          be assumed to contain no bind parameters. Even if there are no bind parameters, this object may be used to
+	 *          set fetch size and other performance options.
+	 * @return boolean value whether the statement was applied.
+	 * @throws DataAccessException if there is any problem issuing the execution.
+	 */
+	boolean execute(String cql, PreparedStatementBinder psb) throws DataAccessException;
+
+	/**
+	 * Issue a single CQL operation (such as an insert, update or delete statement) via a prepared statement, binding the
+	 * given arguments.
+	 *
+	 * @param cql static CQL to execute, must not be empty or {@literal null}.
+	 * @param args arguments to bind to the query (leaving it to the {@link PreparedStatement} to guess the corresponding
+	 *          CQL type).
+	 * @return boolean value whether the statement was applied.
+	 * @throws DataAccessException if there is any problem issuing the execution.
+	 */
+	boolean execute(String cql, Object... args) throws DataAccessException;
+
+	// -------------------------------------------------------------------------
+	// Methods dealing with cluster metadata
+	// -------------------------------------------------------------------------
+
+	/**
 	 * Describe the current Ring. This uses the provided {@link RingMemberHostMapper} to provide the basics of the
 	 * Cassandra Ring topology.
-	 * 
+	 *
 	 * @return The list of ring tokens that are active in the cluster
 	 */
 	List<RingMember> describeRing() throws DataAccessException;
@@ -1256,180 +776,10 @@ public interface CqlOperations {
 	/**
 	 * Describe the current Ring. Application code must provide its own {@link HostMapper} implementation to process the
 	 * lists of hosts returned by the Cassandra Cluster Metadata.
-	 * 
+	 *
 	 * @param hostMapper The implementation to use for host mapping.
 	 * @return Collection generated by the provided HostMapper.
 	 * @throws DataAccessException
 	 */
 	<T> Collection<T> describeRing(HostMapper<T> hostMapper) throws DataAccessException;
-
-	/**
-	 * Get the current Session used for operations in the implementing class.
-	 * 
-	 * @return The DataStax Driver Session Object
-	 */
-	Session getSession();
-
-	/**
-	 * This is an operation designed for high performance writes. The cql is used to create a PreparedStatement once, then
-	 * all row values are bound to the single PreparedStatement and executed against the Session.
-	 * <p>
-	 * This is used internally by the other ingest() methods, but can be used if you want to write your own RowIterator.
-	 * The Object[] length returned by the next() implementation must match the number of bind variables in the CQL.
-	 * </p>
-	 * 
-	 * @param cql The CQL
-	 * @param rowIterator Implementation to provide the Object[] to be bound to the CQL.
-	 * @param options The Query Options Object
-	 */
-	void ingest(String cql, RowIterator rowIterator, WriteOptions options);
-
-	/**
-	 * This is an operation designed for high performance writes. The CQL is used to create a PreparedStatement once, then
-	 * all row values are bound to the single PreparedStatement and executed against the Session.
-	 * <p>
-	 * This is used internally by the other ingest() methods, but can be used if you want to write your own RowIterator.
-	 * The Object[] length returned by the next() implementation must match the number of bind variables in the CQL.
-	 * </p>
-	 * 
-	 * @param cql The CQL
-	 * @param rowIterator Implementation to provide the Object[] to be bound to the CQL.
-	 */
-	void ingest(String cql, RowIterator rowIterator);
-
-	/**
-	 * This is an operation designed for high performance writes. The CQL is used to create a PreparedStatement once, then
-	 * all row values are bound to the single PreparedStatement and executed against the Session.
-	 * <p>
-	 * The List<?> length must match the number of bind variables in the CQL.
-	 * </p>
-	 * 
-	 * @param cql The CQL
-	 * @param rows List of List<?> with data to bind to the CQL.
-	 * @param options The Query Options Object
-	 */
-	void ingest(String cql, List<List<?>> rows, WriteOptions options);
-
-	/**
-	 * This is an operation designed for high performance writes. The CQL is used to create a {@link PreparedStatement}
-	 * once, then all row values are bound to that {@link PreparedStatement} and executed against the {@link Session}.
-	 * <p>
-	 * The lengths of the nested {@link List}s must not be less than the number of bind variables in the CQL.
-	 * </p>
-	 * 
-	 * @param cql The CQL
-	 * @param rows The data to bind to the CQL statement
-	 */
-	void ingest(String cql, List<List<?>> rows);
-
-	/**
-	 * This is an operation designed for high performance writes. The CQL is used to create a {@link PreparedStatement}
-	 * once, then all row values are bound to that {@link PreparedStatement} and executed against the {@link Session}.
-	 * <p>
-	 * The lengths of the nested object arrays must not be less than the number of bind variables in the CQL.
-	 * </p>
-	 * 
-	 * @param cql The CQL
-	 * @param rows The data to bind to the CQL statement
-	 */
-	void ingest(String cql, Object[][] rows);
-
-	/**
-	 * This is an operation designed for high performance writes. The CQL is used to create a {@link PreparedStatement}
-	 * once, then all row values are bound to that {@link PreparedStatement} and executed against the {@link Session}.
-	 * <p>
-	 * The lengths of the nested object arrays must not be less than the number of bind variables in the CQL.
-	 * </p>
-	 * 
-	 * @param cql The CQL
-	 * @param rows The data to bind to the CQL statement
-	 * @param options The Query Options Object
-	 */
-	void ingest(String cql, Object[][] rows, WriteOptions options);
-
-	/**
-	 * Delete all rows in the table
-	 * 
-	 * @param tableName
-	 */
-	void truncate(CqlIdentifier tableName);
-
-	/**
-	 * Delete all rows in the table
-	 * 
-	 * @param tableName
-	 */
-	void truncate(String tableName);
-
-	/**
-	 * Counts all rows for given table
-	 * 
-	 * @param tableName
-	 * @return
-	 */
-	long count(CqlIdentifier tableName);
-
-	/**
-	 * Counts all rows for given table
-	 * 
-	 * @param tableName
-	 * @return
-	 */
-	long count(String tableName);
-
-	/**
-	 * Convenience method to convert the given specification to CQL and execute it.
-	 * 
-	 * @param specification The specification to execute; must not be null.
-	 */
-	ResultSet execute(DropTableSpecification specification);
-
-	/**
-	 * Convenience method to convert the given specification to CQL and execute it.
-	 * 
-	 * @param specification The specification to execute; must not be null.
-	 */
-	ResultSet execute(CreateTableSpecification specification);
-
-	/**
-	 * Convenience method to convert the given specification to CQL and execute it.
-	 * 
-	 * @param specification The specification to execute; must not be null.
-	 */
-	ResultSet execute(AlterTableSpecification specification);
-
-	/**
-	 * Convenience method to convert the given specification to CQL and execute it.
-	 * 
-	 * @param specification The specification to execute; must not be null.
-	 */
-	ResultSet execute(DropKeyspaceSpecification specification);
-
-	/**
-	 * Convenience method to convert the given specification to CQL and execute it.
-	 * 
-	 * @param specification The specification to execute; must not be null.
-	 */
-	ResultSet execute(CreateKeyspaceSpecification specification);
-
-	/**
-	 * Convenience method to convert the given specification to CQL and execute it.
-	 * 
-	 * @param specification The specification to execute; must not be null.
-	 */
-	ResultSet execute(AlterKeyspaceSpecification specification);
-
-	/**
-	 * Convenience method to convert the given specification to CQL and execute it.
-	 * 
-	 * @param specification The specification to execute; must not be null.
-	 */
-	ResultSet execute(DropIndexSpecification specification);
-
-	/**
-	 * Convenience method to convert the given specification to CQL and execute it.
-	 * 
-	 * @param specification The specification to execute; must not be null.
-	 */
-	ResultSet execute(CreateIndexSpecification specification);
 }
