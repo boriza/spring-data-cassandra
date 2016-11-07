@@ -20,6 +20,7 @@ import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 import org.springframework.cassandra.core.CqlOperations;
+import org.springframework.cassandra.core.CqlProvider;
 import org.springframework.cassandra.core.CqlTemplate;
 import org.springframework.cassandra.core.QueryOptions;
 import org.springframework.cassandra.core.SessionCallback;
@@ -39,6 +40,7 @@ import com.datastax.driver.core.ResultSet;
 import com.datastax.driver.core.Session;
 import com.datastax.driver.core.SimpleStatement;
 import com.datastax.driver.core.Statement;
+import com.datastax.driver.core.exceptions.DriverException;
 import com.datastax.driver.core.querybuilder.Delete;
 import com.datastax.driver.core.querybuilder.Insert;
 import com.datastax.driver.core.querybuilder.QueryBuilder;
@@ -311,15 +313,9 @@ public class CassandraTemplate implements CassandraOperations {
 
 		CqlIdentifier tableName = getTableName(entity.getClass());
 
-		Insert insertQuery = QueryUtils.createInsertQuery(tableName.toCql(), entity, options, converter);
+		Insert insert = QueryUtils.createInsertQuery(tableName.toCql(), entity, options, converter);
 
-		Boolean wasApplied = cqlOperations
-				.execute((SessionCallback<Boolean>) session -> session.execute(insertQuery).wasApplied());
-		if (wasApplied) {
-			return entity;
-		}
-
-		return null;
+		return cqlOperations.execute(new StatementCallback<>(insert, entity));
 	}
 
 	/*
@@ -344,13 +340,7 @@ public class CassandraTemplate implements CassandraOperations {
 
 		Update update = QueryUtils.createUpdateQuery(tableName.toCql(), entity, options, converter);
 
-		Boolean wasApplied = cqlOperations
-				.execute((SessionCallback<Boolean>) session -> session.execute(update).wasApplied());
-		if (wasApplied) {
-			return entity;
-		}
-
-		return null;
+		return cqlOperations.execute(new StatementCallback<>(update, entity));
 	}
 
 	/*
@@ -393,13 +383,7 @@ public class CassandraTemplate implements CassandraOperations {
 
 		Delete delete = QueryUtils.createDeleteQuery(tableName.toCql(), entity, options, converter);
 
-		Boolean wasApplied = cqlOperations
-				.execute((SessionCallback<Boolean>) session -> session.execute(delete).wasApplied());
-		if (wasApplied) {
-			return entity;
-		}
-
-		return null;
+		return cqlOperations.execute(new StatementCallback<>(delete, entity));
 	}
 
 	/*
@@ -465,5 +449,26 @@ public class CassandraTemplate implements CassandraOperations {
 		}
 
 		return entity;
+	}
+
+	private static class StatementCallback<T> implements SessionCallback<T>, CqlProvider {
+
+		private final Statement statement;
+		private final T entity;
+
+		StatementCallback(Statement statement, T entity) {
+			this.statement = statement;
+			this.entity = entity;
+		}
+
+		@Override
+		public T doInSession(Session session) throws DriverException, DataAccessException {
+			return session.execute(statement).wasApplied() ? entity : null;
+		}
+
+		@Override
+		public String getCql() {
+			return statement.toString();
+		}
 	}
 }
